@@ -797,6 +797,42 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim) {
   const fullBoard = { left: 0, right: board.stockWidth, top: 0, bottom: board.stockHeight };
   recurse(fullBoard, 0);
 
+  // ── Helper: compute region for waste trim cuts from adjacent pieces ──
+  function computeWasteTrimRegion(cutType, cutPos) {
+    let minTop = board.stockHeight, maxBottom = 0;
+    let minLeft = board.stockWidth, maxRight = 0;
+    let found = false;
+
+    for (const p of pieces) {
+      if (cutType === 'vertical') {
+        const touchesLeft = Math.abs(p.x + p.placedWidth - cutPos) <= kerf;
+        const touchesRight = Math.abs(p.x - cutPos - kerf) <= kerf || Math.abs(p.x - cutPos) <= kerf;
+        if (touchesLeft || touchesRight) {
+          minTop = Math.min(minTop, p.y);
+          maxBottom = Math.max(maxBottom, p.y + p.placedHeight);
+          minLeft = Math.min(minLeft, p.x);
+          maxRight = Math.max(maxRight, p.x + p.placedWidth);
+          found = true;
+        }
+      } else {
+        const touchesAbove = Math.abs(p.y + p.placedHeight - cutPos) <= kerf;
+        const touchesBelow = Math.abs(p.y - cutPos - kerf) <= kerf || Math.abs(p.y - cutPos) <= kerf;
+        if (touchesAbove || touchesBelow) {
+          minTop = Math.min(minTop, p.y);
+          maxBottom = Math.max(maxBottom, p.y + p.placedHeight);
+          minLeft = Math.min(minLeft, p.x);
+          maxRight = Math.max(maxRight, p.x + p.placedWidth);
+          found = true;
+        }
+      }
+    }
+
+    if (!found) {
+      return { left: 0, right: board.stockWidth, top: 0, bottom: board.stockHeight };
+    }
+    return { left: minLeft, right: maxRight, top: minTop, bottom: maxBottom };
+  }
+
   // â”€â”€ Waste trim: any remaining positions not emitted â”€â”€
   for (const { type, pos } of allPositions) {
     const key = `${type}_${pos}`;
@@ -819,7 +855,7 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim) {
       description: `Corte ${cutNumber - 1}: ${type === 'horizontal' ? 'Horizontal' : 'Vertical'} a ${pos}mm (Recorte)`,
       kerf,
       affectedPieceIndices: adj,
-      region: { left: 0, right: board.stockWidth, top: 0, bottom: board.stockHeight },
+      region: computeWasteTrimRegion(type, pos),
     });
   }
 

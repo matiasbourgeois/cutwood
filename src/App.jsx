@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, FileText, Package, BookOpen, Sun, Moon, ChevronLeft, ChevronRight, Scissors, AlertTriangle, Layers, Rocket, Loader2 } from 'lucide-react';
+import { Download, Upload, FileText, Package as PackageIcon, BookOpen, Sun, Moon, ChevronLeft, ChevronRight, Scissors, AlertTriangle, Layers, Rocket, Loader2 } from 'lucide-react';
 import './index.css';
 import Sidebar from './components/Sidebar/Sidebar';
 import ConfirmModal from './components/ConfirmModal';
@@ -78,6 +78,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [offcuts, setOffcuts] = useState(getAllOffcuts());
   const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmType, setConfirmType] = useState(null); // 'reoptimize' | 'offcuts'
   const [pendingOptimize, setPendingOptimize] = useState(null);
   const [showRetazosModal, setShowRetazosModal] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('cutwood-theme') || 'dark');
@@ -211,10 +212,19 @@ export default function App() {
       showToast(`ℹ️ ${invalidCount} pieza(s) sin medidas completas fueron ignoradas`, 'warning');
     }
 
-    // Check if we need confirmation for selected offcuts
+    // Check if we need confirmation for re-optimization
     const selectedOffcuts = offcuts.filter(o => o.selected);
+    if (result) {
+      setPendingOptimize(validPieces);
+      setConfirmType(selectedOffcuts.length > 0 ? 'offcuts' : 'reoptimize');
+      setShowConfirm(true);
+      return;
+    }
+
+    // Check if we need confirmation for selected offcuts (first-time optimize)
     if (selectedOffcuts.length > 0) {
       setPendingOptimize(validPieces);
+      setConfirmType('offcuts');
       setShowConfirm(true);
       return;
     }
@@ -358,33 +368,41 @@ export default function App() {
           {projectName && <span className="header-project-badge">{projectName}</span>}
         </div>
         <div className="header-actions">
-          <button className="btn btn-icon" onClick={() => fileInputRef.current?.click()} title="Importar muebles">
-            <Upload size={16} />
-          </button>
-          <button className="btn btn-icon" onClick={handleExportDB} title="Exportar muebles">
-            <Download size={16} />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={handleImportDB}
-          />
-          {result && (
-            <button className="btn btn-icon" onClick={handleExportPDF} title="Exportar PDF">
-              <FileText size={16} />
+          {/* Group: Import / Export / PDF */}
+          <div className="header-btn-group">
+            <button className="header-group-item" onClick={() => fileInputRef.current?.click()} title="Importar muebles">
+              <Upload size={15} />
             </button>
-          )}
-          <button className="btn btn-outline" onClick={() => setShowRetazosModal(true)} title="Inventario de retazos">
-            <Package size={15} /> Retazos
-            {offcuts.length > 0 && <span className="retazos-header-badge">{offcuts.length}</span>}
+            <button className="header-group-item" onClick={handleExportDB} title="Exportar muebles">
+              <Download size={15} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportDB}
+            />
+            {result && (
+              <button className="header-group-item" onClick={handleExportPDF} title="Exportar PDF">
+                <FileText size={15} />
+              </button>
+            )}
+          </div>
+
+          {/* Retazos chip */}
+          <button className="header-chip" onClick={() => setShowRetazosModal(true)} title="Inventario de retazos">
+            <PackageIcon size={14} />
+            <span>Retazos</span>
+            {offcuts.length > 0 && <span className="header-chip-badge">{offcuts.length}</span>}
           </button>
-          <a href="/CutWood_Guia_Completa.pdf" target="_blank" rel="noopener noreferrer" className="btn btn-icon" title="Guía de usuario">
-            <BookOpen size={16} />
+
+          {/* Circle buttons */}
+          <a href="/CutWood_Guia_Completa.pdf" target="_blank" rel="noopener noreferrer" className="header-btn-circle" title="Guía de usuario">
+            <BookOpen size={15} />
           </a>
-          <button className="btn btn-icon theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
-            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+          <button className="header-btn-circle theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
         </div>
         {toast && (
@@ -437,7 +455,7 @@ export default function App() {
                   </button>
                   <span className="sheet-nav-label">
                     {currentBoard?.isOffcut
-                      ? <><Package size={14} style={{display:'inline',verticalAlign:'text-bottom'}} /> {`Retazo — ${currentBoard.stockWidth}×${currentBoard.stockHeight}mm`}</>
+                      ? <><PackageIcon size={14} style={{display:'inline',verticalAlign:'text-bottom'}} /> {`Retazo — ${currentBoard.stockWidth}×${currentBoard.stockHeight}mm`}</>
                       : `Tablero ${currentBoardIndex + 1} de ${result.boards.length}`
                     }
                   </span>
@@ -528,19 +546,29 @@ export default function App() {
 
       {showConfirm && (
         <ConfirmModal
-          icon="📦"
-          title="Optimizar con retazos"
-          message={`Vas a optimizar usando ${offcuts.filter(o => o.selected).length} retazo(s) seleccionado(s). Los retazos usados se eliminarán y se guardarán los nuevos sobrantes.`}
-          confirmText="Optimizar"
+          variant={confirmType === 'reoptimize' ? 'warning' : undefined}
+          icon={confirmType === 'reoptimize' ? <AlertTriangle size={28} /> : <PackageIcon size={28} />}
+          title={confirmType === 'reoptimize' ? '¿Re-optimizar?' : 'Optimizar con retazos'}
+          message={confirmType === 'reoptimize'
+            ? 'Ya tenés una optimización activa. Si re-optimizás se reemplazará el resultado actual y se generarán nuevos retazos.'
+            : `Vas a optimizar usando ${offcuts.filter(o => o.selected).length} retazo(s) seleccionado(s). Los retazos usados se eliminarán y se guardarán los nuevos sobrantes.`
+          }
+          detail={confirmType === 'reoptimize'
+            ? `${pendingOptimize?.length || 0} pieza(s) · Tablero ${stock.width}×${stock.height}mm · Kerf ${options.kerf || 0}mm`
+            : null
+          }
+          confirmText={confirmType === 'reoptimize' ? 'Re-optimizar' : 'Optimizar'}
           confirmIcon={<Rocket size={15} />}
           cancelText="Cancelar"
           onConfirm={() => {
             setShowConfirm(false);
+            setConfirmType(null);
             if (pendingOptimize) doOptimize(pendingOptimize);
             setPendingOptimize(null);
           }}
           onCancel={() => {
             setShowConfirm(false);
+            setConfirmType(null);
             setPendingOptimize(null);
           }}
         />

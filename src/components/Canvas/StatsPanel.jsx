@@ -1,4 +1,4 @@
-import { BarChart3, AlertTriangle } from 'lucide-react';
+import { BarChart3, AlertTriangle, Layers, Grid3x3, Trash2, DollarSign } from 'lucide-react';
 
 export default function StatsPanel({ stats, currentBoard, pieces, stock }) {
   if (!stats) return null;
@@ -11,10 +11,17 @@ export default function StatsPanel({ stats, currentBoard, pieces, stock }) {
     ? (currentBoard.wasteArea / 1000000).toFixed(3)
     : (stats.totalWasteArea / 1000000).toFixed(3);
 
+  const utilizationNum = parseFloat(utilization);
   const utilizationClass =
-    parseFloat(utilization) >= 80 ? 'success'
-    : parseFloat(utilization) >= 60  ? ''
+    utilizationNum >= 80 ? 'success'
+    : utilizationNum >= 60 ? ''
     : 'warning';
+
+  // SVG radial ring params
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (utilizationNum / 100) * circumference;
+  const ringColor = utilizationNum >= 80 ? '#10b981' : utilizationNum >= 60 ? '#06B6D4' : '#f59e0b';
 
   // Calculate edge banding total meters
   const edgeBandingMeters = (pieces || []).reduce((total, piece) => {
@@ -28,7 +35,7 @@ export default function StatsPanel({ stats, currentBoard, pieces, stock }) {
     if (eb.bottom) meters += w;
     if (eb.left) meters += h;
     if (eb.right) meters += h;
-    return total + (meters * qty) / 1000; // mm to m
+    return total + (meters * qty) / 1000;
   }, 0);
 
   // Calculate costs
@@ -40,76 +47,95 @@ export default function StatsPanel({ stats, currentBoard, pieces, stock }) {
   const hasCosts = pricePerBoard > 0 || pricePerMeterEdge > 0;
 
   return (
-    <div className="section-card">
-      <div className="section-header" style={{ cursor: 'default' }}>
-        <div className="section-header-left">
-          <span className="section-icon"><BarChart3 size={16} /></span>
-          <span className="section-title">Estadísticas</span>
+    <div className="stats-panel-redesign">
+      {/* Radial Progress Ring */}
+      <div className="utilization-ring-container">
+        <svg className="utilization-ring" viewBox="0 0 100 100">
+          {/* Background track */}
+          <circle
+            cx="50" cy="50" r={radius}
+            fill="none"
+            stroke="var(--border-subtle)"
+            strokeWidth="6"
+          />
+          {/* Progress arc */}
+          <circle
+            cx="50" cy="50" r={radius}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            transform="rotate(-90 50 50)"
+            className="utilization-ring-progress"
+            style={{ filter: `drop-shadow(0 0 6px ${ringColor}60)` }}
+          />
+        </svg>
+        <div className="utilization-ring-value">
+          <span className="utilization-ring-number" style={{ color: ringColor }}>{Math.round(utilizationNum)}</span>
+          <span className="utilization-ring-percent" style={{ color: ringColor }}>%</span>
+        </div>
+        <div className="utilization-ring-label">Aprovechamiento</div>
+      </div>
+
+      {/* 3-column stat cards */}
+      <div className="stats-grid-3">
+        <div className="stat-card-v2">
+          <div className="stat-card-icon"><Layers size={14} /></div>
+          <div className="stat-card-value">{stats.totalBoards}</div>
+          <div className="stat-card-label">Tableros</div>
+        </div>
+        <div className="stat-card-v2">
+          <div className="stat-card-icon"><Grid3x3 size={14} /></div>
+          <div className="stat-card-value">{stats.placedPieces}</div>
+          <div className="stat-card-label">Piezas</div>
+        </div>
+        <div className="stat-card-v2">
+          <div className="stat-card-icon" style={{ color: 'var(--warning)' }}><Trash2 size={14} /></div>
+          <div className="stat-card-value" style={{ color: 'var(--warning)' }}>{wasteM2}</div>
+          <div className="stat-card-label">Desperdicio m²</div>
         </div>
       </div>
-      <div className="section-body">
-        <div className="stats-grid">
-          <div className="stat-card highlight">
-            <div className={`stat-value ${utilizationClass}`}>{utilization}%</div>
-            <div className="stat-label">Aprovechamiento</div>
-          </div>
 
-          <div className="stat-card">
-            <div className="stat-value">{stats.totalBoards}</div>
-            <div className="stat-label">Tableros</div>
+      {/* Edge banding row */}
+      {edgeBandingMeters > 0 && (
+        <div className="stats-grid-2">
+          <div className="stat-card-v2 stat-card-accent">
+            <div className="stat-card-value">{edgeBandingMeters.toFixed(1)}m</div>
+            <div className="stat-card-label">Tapacanto</div>
           </div>
+          {hasCosts && (
+            <div className="stat-card-v2 stat-card-accent">
+              <div className="stat-card-value">${edgeCost.toLocaleString('es-AR')}</div>
+              <div className="stat-card-label">Costo tapacanto</div>
+            </div>
+          )}
+        </div>
+      )}
 
-          <div className="stat-card">
-            <div className="stat-value">{stats.placedPieces}</div>
-            <div className="stat-label">Piezas colocadas</div>
+      {/* Cost strip */}
+      {hasCosts && (
+        <div className="cost-strip">
+          <div className="cost-strip-row">
+            <span className="cost-strip-label"><DollarSign size={12} /> Tableros</span>
+            <span className="cost-strip-value">${boardCost.toLocaleString('es-AR')}</span>
           </div>
-
-          <div className="stat-card">
-            <div className="stat-value warning">{wasteM2} m²</div>
-            <div className="stat-label">Desperdicio</div>
+          <div className="cost-strip-total">
+            <span className="cost-strip-label">Total</span>
+            <span className="cost-strip-total-value">${totalCost.toLocaleString('es-AR')}</span>
           </div>
         </div>
+      )}
 
-        {/* Edge banding stats */}
-        {edgeBandingMeters > 0 && (
-          <div className="stats-grid" style={{ marginTop: '8px' }}>
-            <div className="stat-card">
-              <div className="stat-value" style={{ color: '#67E8F9' }}>{edgeBandingMeters.toFixed(1)}m</div>
-              <div className="stat-label">Tapacanto</div>
-            </div>
-            {hasCosts && (
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: '#67E8F9' }}>${edgeCost.toLocaleString('es-AR')}</div>
-                <div className="stat-label">Costo tapacanto</div>
-              </div>
-            )}
+      {/* Unfitted warning */}
+      {stats.unfittedPieces > 0 && (
+        <div className="unfitted-warning" style={{ marginTop: '10px' }}>
+          <div className="unfitted-title">
+            <AlertTriangle size={14} style={{display:'inline',verticalAlign:'text-bottom'}} /> {stats.unfittedPieces} pieza(s) no entraron
           </div>
-        )}
-
-        {/* Cost stats */}
-        {hasCosts && (
-          <div className="stats-grid" style={{ marginTop: '8px' }}>
-            <div className="stat-card">
-              <div className="stat-value" style={{ color: '#34d399' }}>${boardCost.toLocaleString('es-AR')}</div>
-              <div className="stat-label">Costo tableros</div>
-            </div>
-            <div className="stat-card highlight">
-              <div className="stat-value" style={{ color: '#fbbf24', fontSize: '1.1rem', fontWeight: 800 }}>
-                ${totalCost.toLocaleString('es-AR')}
-              </div>
-              <div className="stat-label">Costo total</div>
-            </div>
-          </div>
-        )}
-
-        {stats.unfittedPieces > 0 && (
-          <div className="unfitted-warning" style={{ marginTop: '10px' }}>
-            <div className="unfitted-title">
-              <AlertTriangle size={14} style={{display:'inline',verticalAlign:'text-bottom'}} /> {stats.unfittedPieces} pieza(s) no entraron
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

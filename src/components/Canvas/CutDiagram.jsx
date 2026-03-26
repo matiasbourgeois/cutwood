@@ -172,11 +172,14 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
         {/* SVG Definitions for glow effects */}
         <defs>
           <filter id="cut-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
+          </filter>
+          <filter id="board-shadow" x="-5%" y="-5%" width="110%" height="110%">
+            <feDropShadow dx="0" dy="2" stdDeviation="6" floodColor="#06B6D4" floodOpacity="0.12" />
           </filter>
           <filter id="piece-highlight" x="-10%" y="-10%" width="120%" height="120%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur" />
@@ -209,32 +212,59 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
           height={boardH}
           className="board-outline"
           rx="3"
+          filter="url(#board-shadow)"
         />
 
         {/* Board dimension labels */}
-        <text
-          x={offsetX + boardW / 2}
-          y={offsetY - 6}
-          textAnchor="middle"
-          fill="#5a6078"
-          fontSize="11"
-          fontFamily="Inter, sans-serif"
-          fontWeight="500"
-        >
-          {stockWidth} mm
-        </text>
-        <text
-          x={offsetX - 8}
-          y={offsetY + boardH / 2}
-          textAnchor="middle"
-          fill="#5a6078"
-          fontSize="11"
-          fontFamily="Inter, sans-serif"
-          fontWeight="500"
-          transform={`rotate(-90, ${offsetX - 8}, ${offsetY + boardH / 2})`}
-        >
-          {stockHeight} mm
-        </text>
+        <g>
+          <rect
+            x={offsetX + boardW / 2 - 30}
+            y={offsetY - 18}
+            width="60"
+            height="18"
+            rx="4"
+            fill="rgba(6, 182, 212, 0.08)"
+            stroke="rgba(6, 182, 212, 0.15)"
+            strokeWidth="0.5"
+          />
+          <text
+            x={offsetX + boardW / 2}
+            y={offsetY - 7}
+            textAnchor="middle"
+            fill="var(--accent-primary, #06B6D4)"
+            fontSize="10"
+            fontFamily="Inter, sans-serif"
+            fontWeight="600"
+          >
+            {stockWidth} mm
+          </text>
+        </g>
+        <g>
+          <rect
+            x={offsetX - 38}
+            y={offsetY + boardH / 2 - 9}
+            width="50"
+            height="18"
+            rx="4"
+            fill="rgba(6, 182, 212, 0.08)"
+            stroke="rgba(6, 182, 212, 0.15)"
+            strokeWidth="0.5"
+            transform={`rotate(-90, ${offsetX - 13}, ${offsetY + boardH / 2})`}
+          />
+          <text
+            x={offsetX - 13}
+            y={offsetY + boardH / 2}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="var(--accent-primary, #06B6D4)"
+            fontSize="10"
+            fontFamily="Inter, sans-serif"
+            fontWeight="600"
+            transform={`rotate(-90, ${offsetX - 13}, ${offsetY + boardH / 2})`}
+          >
+            {stockHeight} mm
+          </text>
+        </g>
 
         {/* Pieces */}
         {pieces.map((piece, i) => {
@@ -251,8 +281,8 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
           const isAdjacent = hoveredCut ? getAdjacent(piece, i) : false;
           const isDimmed = hoveredCut && !isAdjacent;
           const pieceOpacity = isDimmed ? 0.15 : 1;
-          const strokeWidth = isAdjacent ? 2.5 : 1;
-          const strokeColor = isAdjacent ? '#67E8F9' : color.border;
+          const strokeWidth = 1;
+          const strokeColor = color.border;
 
           return (
             <g
@@ -262,7 +292,6 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
               onMouseLeave={handleMouseLeave}
               style={{ transition: 'opacity 200ms ease' }}
               opacity={pieceOpacity}
-              filter={isAdjacent ? 'url(#piece-highlight)' : undefined}
             >
               <rect
                 x={px}
@@ -433,29 +462,44 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
         {/* Cut line overlay — animated dashed line with glow */}
         {cutLine && (
           <g>
-            {/* Glow layer */}
+            {/* Outer glow — wide magenta diffuse */}
             <line
-              x1={cutLine.x1}
-              y1={cutLine.y1}
-              x2={cutLine.x2}
-              y2={cutLine.y2}
-              stroke="#ef4444"
-              strokeWidth="6"
-              strokeOpacity="0.3"
+              x1={cutLine.x1} y1={cutLine.y1}
+              x2={cutLine.x2} y2={cutLine.y2}
+              stroke="#F43F5E"
+              strokeWidth="10"
+              strokeOpacity="0.15"
               filter="url(#cut-glow)"
             />
-            {/* Main line */}
+            {/* Mid glow — tighter */}
             <line
-              x1={cutLine.x1}
-              y1={cutLine.y1}
-              x2={cutLine.x2}
-              y2={cutLine.y2}
-              stroke="#ef4444"
-              strokeWidth="2"
-              strokeDasharray="10 5"
+              x1={cutLine.x1} y1={cutLine.y1}
+              x2={cutLine.x2} y2={cutLine.y2}
+              stroke="#FB7185"
+              strokeWidth="4"
+              strokeOpacity="0.4"
               className="cut-line-animated"
             />
-            {/* Kerf zone indicator */}
+            {/* Main laser line — bright rose */}
+            <line
+              x1={cutLine.x1} y1={cutLine.y1}
+              x2={cutLine.x2} y2={cutLine.y2}
+              stroke="#FF69B4"
+              strokeWidth="2"
+              className="cut-line-animated"
+            />
+            {/* Center bright core — white */}
+            <line
+              x1={cutLine.x1} y1={cutLine.y1}
+              x2={cutLine.x2} y2={cutLine.y2}
+              stroke="#ffffff"
+              strokeWidth="0.8"
+              strokeOpacity="0.7"
+            />
+            {/* Endpoint markers */}
+            <circle cx={cutLine.x1} cy={cutLine.y1} r="3" fill="#FF69B4" stroke="white" strokeWidth="0.5" opacity="0.9" />
+            <circle cx={cutLine.x2} cy={cutLine.y2} r="3" fill="#FF69B4" stroke="white" strokeWidth="0.5" opacity="0.9" />
+            {/* Kerf zone indicator — rose frosted */}
             {hoveredCut && (() => {
               const r = hoveredCut.region;
               if (hoveredCut.type === 'vertical') {
@@ -463,13 +507,13 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
                 const rh = r ? (r.bottom - r.top) * scale : boardH;
                 return <rect x={offsetX + hoveredCut.position * scale} y={ry1}
                   width={(hoveredCut.kerf || 3) * scale} height={rh}
-                  fill="rgba(239, 68, 68, 0.12)" stroke="none" />;
+                  fill="rgba(244, 63, 94, 0.06)" stroke="rgba(244, 63, 94, 0.15)" strokeWidth="0.5" strokeDasharray="4 2" />;
               } else {
                 const rx = r ? offsetX + r.left * scale : offsetX;
                 const rw = r ? (r.right - r.left) * scale : boardW;
                 return <rect x={rx} y={offsetY + hoveredCut.position * scale}
                   width={rw} height={(hoveredCut.kerf || 3) * scale}
-                  fill="rgba(239, 68, 68, 0.12)" stroke="none" />;
+                  fill="rgba(244, 63, 94, 0.06)" stroke="rgba(244, 63, 94, 0.15)" strokeWidth="0.5" strokeDasharray="4 2" />;
               }
             })()}
 
