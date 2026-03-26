@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CutWood - Propuesta de Monetizacion</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    color: #1a1a2e;
+    background: #fff;
+    line-height: 1.5;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .page {
+    width: 210mm;
+    margin: 0 auto;
+    padding: 30mm 25mm;
+    position: relative;
+    page-break-after: always;
+  }
+
+  .page:last-of-type {
+    page-break-after: avoid;
+  }
+
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #6c63ff, #a78bfa, #6c63ff);
+  }
+
+  .page-footer {
+    position: absolute;
+    bottom: 15mm;
+    left: 25mm;
+    right: 25mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8px;
+    color: #aaa;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+  }
+
+  /* Cover Page */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    height: 247mm;
+    padding: 40mm 25mm;
+  }
+
+  .cover-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+  }
+
+  .cover h1 {
+    font-size: 42px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6c63ff, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+
+  .cover h2 {
+    font-size: 22px;
+    font-weight: 400;
+    color: #555;
+    margin-bottom: 40px;
+  }
+
+  .cover-meta {
+    font-size: 13px;
+    color: #888;
+    margin-top: 30px;
+  }
+
+  .cover-meta strong {
+    color: #6c63ff;
+  }
+
+  .cover-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #6c63ff, #a78bfa);
+    color: white;
+    padding: 10px 28px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* Section Headers */
+  h2.section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 6px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #6c63ff;
+    display: inline-block;
+  }
+
+  h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    margin: 16px 0 8px;
+  }
+
+  p, li {
+    font-size: 12px;
+    color: #444;
+    line-height: 1.7;
+  }
+
+  ul {
+    padding-left: 18px;
+    margin: 6px 0 14px;
+  }
+
+  li { margin-bottom: 4px; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 11.5px;
+  }
+
+  thead th {
+    background: #1a1a2e;
+    color: white;
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  thead th:first-child { border-radius: 6px 0 0 0; }
+  thead th:last-child { border-radius: 0 6px 0 0; }
+
+  tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f5;
+    color: #333;
+  }
+
+  tbody tr:nth-child(even) { background: #f8f9fc; }
+  tbody tr:hover { background: #f0f1ff; }
+
+  .highlight-row td { 
+    background: #f0f1ff !important; 
+    font-weight: 600; 
+    color: #6c63ff;
+  }
+
+  /* Stat Cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 16px 0;
+  }
+
+  .stat-card {
+    border: 1.5px solid #e8e8f0;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+  }
+
+  .stat-card.purple::before { background: #6c63ff; }
+  .stat-card.green::before { background: #10b981; }
+  .stat-card.orange::before { background: #f59e0b; }
+  .stat-card.red::before { background: #ef4444; }
+  .stat-card.blue::before { background: #3b82f6; }
+  .stat-card.teal::before { background: #14b8a6; }
+
+  .stat-value {
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 2px;
+  }
+
+  .stat-card.purple .stat-value { color: #6c63ff; }
+  .stat-card.green .stat-value { color: #10b981; }
+  .stat-card.orange .stat-value { color: #f59e0b; }
+  .stat-card.red .stat-value { color: #ef4444; }
+  .stat-card.blue .stat-value { color: #3b82f6; }
+  .stat-card.teal .stat-value { color: #14b8a6; }
+
+  .stat-label {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  /* Callout boxes */
+  .callout {
+    background: #f8f7ff;
+    border-left: 4px solid #6c63ff;
+    padding: 14px 18px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+
+  .callout.green {
+    background: #f0fdf4;
+    border-left-color: #10b981;
+  }
+
+  .callout.orange {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+  }
+
+  .callout strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #1a1a2e;
+  }
+
+  /* Pricing cards */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 16px 0;
+  }
+
+  .pricing-card {
+    border: 2px solid #e8e8f0;
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    position: relative;
+  }
+
+  .pricing-card.featured {
+    border-color: #6c63ff;
+    box-shadow: 0 4px 20px rgba(108, 99, 255, 0.15);
+  }
+
+  .pricing-card.featured::after {
+    content: 'RECOMENDADO';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #6c63ff, #a78bfa);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 10px;
+    letter-spacing: 1px;
+  }
+
+  .pricing-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #1a1a2e;
+  }
+
+  .pricing-price {
+    font-size: 30px;
+    font-weight: 800;
+    color: #6c63ff;
+    margin-bottom: 4px;
+  }
+
+  .pricing-period {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 14px;
+  }
+
+  .pricing-features {
+    list-style: none;
+    padding: 0;
+    text-align: left;
+  }
+
+  .pricing-features li {
+    font-size: 11px;
+    padding: 4px 0;
+    color: #555;
+  }
+
+  .pricing-features li::before {
+    content: '✓ ';
+    color: #10b981;
+    font-weight: 700;
+  }
+
+  .pricing-features li.disabled {
+    color: #bbb;
+    text-decoration: line-through;
+  }
+
+  .pricing-features li.disabled::before {
+    content: '✕ ';
+    color: #ddd;
+  }
+
+  /* Timeline */
+  .timeline {
+    border-left: 3px solid #6c63ff;
+    padding-left: 20px;
+    margin: 16px 0;
+  }
+
+  .timeline-item {
+    position: relative;
+    margin-bottom: 18px;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -26px;
+    top: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6c63ff;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px #6c63ff;
+  }
+
+  .timeline-week {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6c63ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .timeline-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 2px 0;
+  }
+
+  .timeline-desc {
+    font-size: 11px;
+    color: #666;
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .badge.free { background: #f0fdf4; color: #10b981; }
+  .badge.pro { background: #f0f1ff; color: #6c63ff; }
+
+  .confidential {
+    text-align: center;
+    font-size: 10px;
+    color: #bbb;
+    margin-top: 30px;
+    font-style: italic;
+  }
+
+  @media print {
+    body { background: white !important; margin: 0; padding: 0; }
+    .page { margin: 0; box-shadow: none; width: 100%; padding: 20mm 20mm; }
+    .download-btn { display: none !important; }
+  }
+
+  @media screen {
+    body { background: #e8e8f0; }
+    .page { box-shadow: 0 2px 20px rgba(0,0,0,0.1); margin: 20px auto; }
+  }
+  .download-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: linear-gradient(135deg, #6c63ff, #a78bfa);
+    color: white;
+    border: none;
+    padding: 16px 28px;
+    border-radius: 50px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(108, 99, 255, 0.4);
+    transition: all 0.2s;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(108, 99, 255, 0.5);
+  }
+
+  .download-btn:active {
+    transform: translateY(0);
+  }
+
+  .download-btn.loading {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ PAGE 1: COVER ═══════════════════ -->
+<div class="page cover">
+  <div class="cover-icon">🪚</div>
+  <h1>CutWood</h1>
+  <h2>Propuesta de Monetizacion</h2>
+
+  <div class="cover-badge">DOCUMENTO INTERNO — MARZO 2026</div>
+
+  <div class="cover-meta" style="margin-top: 50px;">
+    <p><strong>GLOSS Amoblamientos</strong></p>
+    <p>Optimizador de Cortes de Melamina</p>
+    <p style="margin-top: 16px;">Preparado: 24 de Marzo de 2026</p>
+    <p>Version: 1.0</p>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 2: RESUMEN EJECUTIVO ═══════════════════ -->
+<div class="page">
+  <h2 class="section-title">1. Resumen Ejecutivo</h2>
+
+  <p style="margin: 16px 0; font-size: 13px;">
+    <strong>CutWood</strong> es un optimizador de cortes para tableros de melamina. 
+    Calcula la mejor distribucion de piezas para minimizar el desperdicio de material, 
+    genera secuencias de corte profesionales y exporta reportes PDF.
+  </p>
+
+  <div class="callout green">
+    <strong>Propuesta de valor</strong>
+    CutWood le ahorra al carpintero al menos 1 tablero por proyecto. Un tablero cuesta ~$70.000.
+    La suscripcion cuesta $6.999/mes. <strong>Retorno de 10x sobre la inversion.</strong>
+  </div>
+
+  <h3>Funcionalidades actuales</h3>
+  <ul>
+    <li>Optimizacion automatica de cortes (algoritmo guillotine)</li>
+    <li>Soporte de direccion de veta (grano) por pieza</li>
+    <li>Tapacanto (edge banding) con calculo de metros lineales</li>
+    <li>Sistema de retazos — reutiliza sobrantes automaticamente</li>
+    <li>Calculo de costos (tableros + tapacanto)</li>
+    <li>Exportacion PDF profesional con diagramas y secuencias</li>
+    <li>Historial de muebles con backup/restauracion</li>
+    <li>Interfaz web moderna — funciona en cualquier dispositivo</li>
+  </ul>
+
+  <h3>Estado actual</h3>
+  <div class="stat-grid">
+    <div class="stat-card green">
+      <div class="stat-value">LIVE</div>
+      <div class="stat-label">En produccion</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-value">v2.0</div>
+      <div class="stat-label">Version actual</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-value">Vercel</div>
+      <div class="stat-label">Hosting</div>
+    </div>
+  </div>
+
+  <p style="font-size: 11px; color: #888; text-align: center;">
+    URL actual: <strong>cutwood.vercel.app</strong> — Acceso publico sin login
+  </p>
+
+  <div class="page-footer">
+    <span>GLOSS Amoblamientos — CutWood</span>
+    <span>Pagina 2</span>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 3: ANALISIS DE MERCADO ═══════════════════ -->
+<div class="page">
+  <h2 class="section-title">2. Analisis de Mercado — Argentina Marzo 2026</h2>
+
+  <h3>Precio de tableros (referencia)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Tipo de tablero</th>
+        <th>Medida</th>
+        <th>Precio</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Melamina blanca aglomerado (Faplac)</td>
+        <td>2750 x 1830 mm</td>
+        <td><strong>$66.700 — $77.300</strong></td>
+      </tr>
+      <tr>
+        <td>Melamina blanca MDF (Faplac)</td>
+        <td>2750 x 1830 mm</td>
+        <td><strong>$89.160</strong></td>
+      </tr>
+      <tr>
+        <td>Melamina color/textura (Lino, Teka)</td>
+        <td>2750 x 1830 mm</td>
+        <td><strong>$100.000 — $125.000</strong></td>
+      </tr>
+      <tr>
+        <td>Melamina blanca (Sadepan)</td>
+        <td>2820 x 1830 mm</td>
+        <td><strong>$53.500</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="font-size: 10px; color: #999;">Fuente: Sodimac, MercadoLibre, FacilPlac — Marzo 2026</p>
+
+  <h3>Competencia directa</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Modelo</th>
+        <th>Precio</th>
+        <th>Limitacion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Multiplacas Optimizer</td>
+        <td>Gratis</td>
+        <td>$0</td>
+        <td>Solo para clientes Multiplacas</td>
+      </tr>
+      <tr>
+        <td>Masisa Optimiza</td>
+        <td>Gratis</td>
+        <td>$0</td>
+        <td>Solo para productos Masisa</td>
+      </tr>
+      <tr>
+        <td>Lepton Optimizer</td>
+        <td>Licencia perpetua</td>
+        <td>~$50.000+</td>
+        <td>Software de escritorio, sin updates</td>
+      </tr>
+      <tr>
+        <td>Corte Certo</td>
+        <td>Suscripcion</td>
+        <td>No publica en ARS</td>
+        <td>Interfaz en portugues</td>
+      </tr>
+      <tr>
+        <td>Genericos MercadoLibre</td>
+        <td>Compra unica</td>
+        <td>$7.500 — $12.650</td>
+        <td>Software viejo, sin soporte</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout orange">
+    <strong>Oportunidad clave</strong>
+    Los optimizadores gratuitos estan ATADOS a maderereras especificas. Los de MercadoLibre son software viejo sin updates. 
+    No existe un optimizador web, moderno, en espanol, con pagos en pesos argentinos.
+    <strong>CutWood llena ese vacio.</strong>
+  </div>
+
+  <h3>Contexto macroeconomico</h3>
+  <div class="stat-grid">
+    <div class="stat-card orange">
+      <div class="stat-value">33%</div>
+      <div class="stat-label">Inflacion interanual</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-value">Volatil</div>
+      <div class="stat-label">Tipo de cambio</div>
+    </div>
+    <div class="stat-card teal">
+      <div class="stat-value">ARS</div>
+      <div class="stat-label">Cobro en pesos via MP</div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>GLOSS Amoblamientos — CutWood</span>
+    <span>Pagina 3</span>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE 4: MODELO DE NEGOCIO ═══════════════════ -->
+<div class="page" style="padding: 18mm 25mm;">
+  <h2 class="section-title">3. Modelo de Negocio: Freemium + Trial</h2>
+  <h3 style="margin-top:8px;">Planes y precios</h3>
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="pricing-name">Gratis</div>
+      <div class="pricing-price" style="font-size: 24px; color: #10b981;">$0</div>
+      <div class="pricing-period">para siempre</div>
+      <ul class="pricing-features">
+        <li>Hasta 5 piezas</li>
+        <li>1 tablero maximo</li>
+        <li>Optimizacion basica</li>
+        <li class="disabled">PDF completo</li>
+        <li class="disabled">Sistema de retazos</li>
+        <li class="disabled">Tapacanto</li>
+        <li class="disabled">Historial ilimitado</li>
+        <li class="disabled">Backup/restauracion</li>
+      </ul>
+    </div>
+    <div class="pricing-card featured">
+      <div class="pricing-name">Pro</div>
+      <div class="pricing-price">$6.999</div>
+      <div class="pricing-period">por mes &nbsp;|&nbsp; $69.990/anual</div>
+      <ul class="pricing-features">
+        <li>Piezas ilimitadas</li>
+        <li>Tableros ilimitados</li>
+        <li>Optimizacion avanzada</li>
+        <li>PDF profesional completo</li>
+        <li>Sistema de retazos</li>
+        <li>Tapacanto + costos</li>
+        <li>Historial ilimitado</li>
+        <li>Backup/restauracion</li>
+      </ul>
+    </div>
+    <div class="pricing-card">
+      <div class="pricing-name">Taller</div>
+      <div class="pricing-price" style="font-size: 22px;">$9.999</div>
+      <div class="pricing-period">por mes (futuro)</div>
+      <ul class="pricing-features">
+        <li>Todo de Pro</li>
+        <li>Multi-usuario</li>
+        <li>Compartir proyectos</li>
+        <li>Soporte prioritario</li>
+        <li>Reportes avanzados</li>
+        <li class="disabled">Integracion CNC</li>
+        <li class="disabled">API de cortes</li>
+        <li class="disabled">White-label</li>
+      </ul>
+    </div>
+  </div>
+  <h3 style="margin-top:8px;">Justificacion del precio: $6.999/mes</h3>
+  <table>
+    <thead><tr><th>Criterio</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr class="highlight-row"><td>10% de un tablero barato</td><td>$67.000 x 10% = $6.700</td></tr>
+      <tr><td>Menos que un cafe/dia</td><td>$6.999 / 30 = $233/dia</td></tr>
+      <tr><td>Mas barato que ML</td><td>Genericos: $7.500-$12.650 una vez, sin updates</td></tr>
+      <tr><td>ROI demostrable</td><td>Ahorra 1 tablero/mes = retorno 10x</td></tr>
+    </tbody>
+  </table>
+  <div class="page-footer"><span>GLOSS Amoblamientos — CutWood</span><span>Pagina 4</span></div>
+</div>
+
+<!-- ═══════════════════ PAGE 5: COMPARATIVA + PROYECCION ═══════════════════ -->
+<div class="page" style="padding: 18mm 25mm;">
+  <h2 class="section-title">4. Suscripcion vs Pago Unico</h2>
+  <table>
+    <thead><tr><th>Aspecto</th><th>Suscripcion ($6.999/mes)</th><th>Pago Unico ($50.000)</th></tr></thead>
+    <tbody>
+      <tr><td>Barrera de entrada</td><td><strong style="color:#10b981">Baja</strong> — "pruebo un mes"</td><td><strong style="color:#ef4444">Alta</strong> — "y si no sirve?"</td></tr>
+      <tr><td>Ingreso por usuario/ano</td><td><strong style="color:#10b981">$83.988</strong></td><td><strong style="color:#ef4444">$50.000</strong> (una vez)</td></tr>
+      <tr><td>Updates y soporte</td><td><strong style="color:#10b981">Incluidos</strong></td><td><strong style="color:#ef4444">Cobrar aparte</strong></td></tr>
+      <tr><td>Retencion</td><td><strong style="color:#10b981">Incentivada</strong></td><td><strong style="color:#ef4444">Sin incentivo</strong></td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <strong>Estrategia de trial</strong>
+    Al registrarse: <strong>7 dias Pro completo sin tarjeta.</strong> Despues baja a Gratis. La "perdida" genera urgencia de pago.
+  </div>
+  <h2 class="section-title" style="margin-top: 16px;">5. Proyeccion de Ingresos</h2>
+  <p style="margin: 6px 0; font-size: 11px;">Escenario conservador: crecimiento organico (redes, SEO, boca a boca).</p>
+  <table>
+    <thead><tr><th>Mes</th><th>Usuarios Pro</th><th>Ingreso mensual</th><th>Ingreso acumulado</th></tr></thead>
+    <tbody>
+      <tr><td>Mes 1</td><td>5</td><td>$34.995</td><td>$34.995</td></tr>
+      <tr><td>Mes 3</td><td>20</td><td>$139.980</td><td>$349.950</td></tr>
+      <tr><td>Mes 6</td><td>50</td><td>$349.950</td><td>$1.224.825</td></tr>
+      <tr class="highlight-row"><td>Mes 12</td><td>150</td><td>$1.049.850</td><td>$6.299.250</td></tr>
+    </tbody>
+  </table>
+  <div class="stat-grid">
+    <div class="stat-card green"><div class="stat-value">$6.3M</div><div class="stat-label">Ingreso ano 1</div></div>
+    <div class="stat-card purple"><div class="stat-value">150</div><div class="stat-label">Usuarios pro mes 12</div></div>
+    <div class="stat-card blue"><div class="stat-value">~$0</div><div class="stat-label">Costo operativo*</div></div>
+  </div>
+  <p style="font-size: 9px; color: #999;">*Vercel free tier, Supabase free tier, Mercado Pago ~5% comision</p>
+  <div class="page-footer"><span>GLOSS Amoblamientos — CutWood</span><span>Pagina 5</span></div>
+</div>
+
+<!-- ═══════════════════ PAGE 6: TECH + ROADMAP ═══════════════════ -->
+<div class="page" style="padding: 18mm 25mm;">
+  <h2 class="section-title">6. Stack Tecnico</h2>
+  <table>
+    <thead><tr><th>Componente</th><th>Tecnologia</th><th>Costo</th></tr></thead>
+    <tbody>
+      <tr><td>Frontend</td><td>React + Vite (actual)</td><td>$0</td></tr>
+      <tr><td>Landing Page</td><td>Misma app, nueva ruta</td><td>$0</td></tr>
+      <tr><td>Autenticacion</td><td>Supabase Auth (Google + Email)</td><td>Free tier</td></tr>
+      <tr><td>Base de datos</td><td>Supabase (PostgreSQL)</td><td>Free tier hasta 500MB</td></tr>
+      <tr><td>Hosting</td><td>Vercel</td><td>Free tier</td></tr>
+      <tr><td>Pagos</td><td>Mercado Pago (suscripciones)</td><td>~5% por transaccion</td></tr>
+      <tr><td>Dominio</td><td>cutwood.com.ar / cutwood.ar</td><td>~$15.000/ano</td></tr>
+    </tbody>
+  </table>
+  <h2 class="section-title" style="margin-top: 20px;">7. Roadmap — 4 Semanas</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-week">Semana 1 - 2</div>
+      <div class="timeline-title">Pulir producto</div>
+      <div class="timeline-desc">Bugs, optimizador, UX mobile, edge cases, performance</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-week">Semana 3</div>
+      <div class="timeline-title">Landing Page + Auth</div>
+      <div class="timeline-desc">Landing god-tier + Login/registro con Google y email via Supabase</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-week">Semana 4</div>
+      <div class="timeline-title">Pagos + Feature Gating</div>
+      <div class="timeline-desc">Integracion Mercado Pago, trial 7 dias, restriccion de features por plan</div>
+    </div>
+  </div>
+  <div class="callout green">
+    <strong>Frase para la landing</strong>
+    "CutWood te ahorra al menos 1 tablero por mes. Un tablero = $70.000. La suscripcion = $6.999.
+    <strong>Se paga solo.</strong>"
+  </div>
+  <div class="confidential">Documento confidencial — GLOSS Amoblamientos — Marzo 2026</div>
+  <div class="page-footer"><span>GLOSS Amoblamientos — CutWood</span><span>Pagina 6</span></div>
+</div>
+
+<button class="download-btn" id="downloadBtn" onclick="downloadPDF()">
+  <span>&#11015;</span> Descargar PDF
+</button>
+
+<script>
+function downloadPDF() {
+  window.print();
+}
+</script>
+
+</body>
+</html>
