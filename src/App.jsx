@@ -355,6 +355,7 @@ export default function App() {
             <line x1="4" y1="16" x2="28" y2="16" stroke="var(--bg-primary)" strokeWidth="1.5" strokeDasharray="2 1.5"/>
           </svg>
           <span className="header-logo-text">CutWood</span>
+          {projectName && <span className="header-project-badge">{projectName}</span>}
         </div>
         <div className="header-actions">
           <button className="btn btn-icon" onClick={() => fileInputRef.current?.click()} title="Importar muebles">
@@ -508,6 +509,7 @@ export default function App() {
             </>
           ) : (
             <div className="empty-state">
+              <div className="empty-state-grid"></div>
               <div className="empty-state-icon"><Layers size={64} strokeWidth={1} /></div>
               <div className="empty-state-title">
                 Optimizá tus cortes de melamina
@@ -515,6 +517,9 @@ export default function App() {
               <div className="empty-state-text">
                 Cargá las piezas de tu mueble en el panel izquierdo, configurá el tablero y
                 hacé clic en <strong>Optimizar Cortes</strong> para ver el resultado.
+              </div>
+              <div className="empty-state-arrow">
+                ← Empezá por el panel izquierdo
               </div>
             </div>
           )}

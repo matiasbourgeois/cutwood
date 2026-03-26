@@ -1,7 +1,9 @@
+import { useRef } from 'react';
+import { getAllProjects } from '../../utils/storage';
 import ProjectManager from './ProjectManager';
 import PiecesList from './PiecesList';
 import StockConfig from './StockConfig';
-import { Scissors, Loader2 } from 'lucide-react';
+import { Scissors, Loader2, FolderOpen } from 'lucide-react';
 
 export default function Sidebar({
   projectName,
@@ -19,10 +21,15 @@ export default function Sidebar({
   showToast,
   style,
 }) {
+  const projectRef = useRef(null);
+  const projectCount = getAllProjects().length;
+
   return (
     <aside className="sidebar" style={style}>
       <div className="sidebar-scroll">
+        {/* 1. Project name — inline bar at top */}
         <ProjectManager
+          ref={projectRef}
           projectName={projectName}
           onNameChange={onProjectNameChange}
           pieces={pieces}
@@ -31,18 +38,24 @@ export default function Sidebar({
           onLoadProject={onLoadProject}
           onNewProject={onNewProject}
         />
-        <PiecesList
-          pieces={pieces}
-          onChange={onPiecesChange}
-          showToast={showToast}
-        />
+
+        {/* 2. Board config — FIRST (natural workflow) */}
         <StockConfig
           stock={stock}
           onStockChange={onStockChange}
           options={options}
           onOptionsChange={onOptionsChange}
         />
+
+        {/* 3. Pieces list — SECOND */}
+        <PiecesList
+          pieces={pieces}
+          onChange={onPiecesChange}
+          showToast={showToast}
+        />
       </div>
+
+      {/* Sticky bottom: Optimize + History */}
       <div className="sidebar-bottom">
         <button
           className="optimize-btn"
@@ -53,6 +66,12 @@ export default function Sidebar({
             ? <><Loader2 size={17} className="spin-icon" /> Calculando...</>
             : <><Scissors size={17} /> Optimizar Cortes</>
           }
+        </button>
+        <button className="history-open-btn" onClick={() => projectRef.current?.openHistory()}>
+          <FolderOpen size={14} style={{display:'inline',verticalAlign:'text-bottom'}} /> Historial de Muebles
+          {projectCount > 0 && (
+            <span className="history-open-count">{projectCount}</span>
+          )}
         </button>
       </div>
     </aside>
