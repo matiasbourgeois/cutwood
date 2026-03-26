@@ -2123,6 +2123,12 @@ body {
   border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
+.level-ret {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
 .cut-step-info {
   flex: 1;
 }

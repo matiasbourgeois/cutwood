@@ -489,7 +489,7 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
       isOffcut: board.isOffcut || false,
       offcutSource: board.offcutSource || null,
       pieces: board.pieces,
-      cutSequence: generateHierarchicalCutSequence(board, kerf, edgeTrim),
+      cutSequence: generateHierarchicalCutSequence(board, kerf, edgeTrim, usableOffcuts),
       utilization: board.bin.getUtilization(),
       wasteArea: board.bin.getWasteArea(),
       offcuts: usableOffcuts,
@@ -619,7 +619,7 @@ function mergeKerfAdjacent(positions, kerf) {
   return merged;
 }
 
-function generateHierarchicalCutSequence(board, kerf, edgeTrim) {
+function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
   const cuts = [];
   let cutNumber = 1;
   const pieces = board.pieces;
@@ -734,31 +734,48 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim) {
     if (candidates.length === 0) return;
 
     // â”€â”€ Score candidates â”€â”€
-    // Priority:
-    // 1. Peeling cuts (minSide=1, isolates a single piece) â†’ preferred
-    // 2. Among peeling cuts: prefer the one closest to the region edge
-    // 3. Among non-peeling: prefer most balanced split
-    // 4. Grain preference as tiebreaker
+    // -- Option C Sort: V-balanced > H-balanced > Peeling --
+    // Industry standard: vertical rip cuts first, then horizontal crosscuts,
+    // then peeling for individual pieces at leaf level.
     const grainPref = grain === 'horizontal' ? 'horizontal' : grain === 'vertical' ? 'vertical' : null;
 
     candidates.sort((a, b) => {
-      // Peeling (minSide=1) beats non-peeling
-      const aPeel = a.minSide === 1 ? 1 : 0;
-      const bPeel = b.minSide === 1 ? 1 : 0;
-      if (aPeel !== bPeel) return bPeel - aPeel; // peeling first
+      // Check if any V-balanced candidate exists at this level
+      const hasVBal = candidates.some(c => c.type === 'vertical' && c.minSide >= 2);
 
-      if (aPeel && bPeel) {
-        // Both are peeling cuts â†’ prefer edge closest (lowest pos for top/left peel)
-        // Determine which side has the single piece
-        const aEdge = a.before === 1 ? a.pos : (a.type === 'vertical' ? region.right - a.pos : region.bottom - a.pos);
-        const bEdge = b.before === 1 ? b.pos : (b.type === 'vertical' ? region.right - b.pos : region.bottom - b.pos);
-        if (aEdge !== bEdge) return aEdge - bEdge; // closer to edge first
+      if (hasVBal) {
+        // V-balanced mode: V-balanced > H-balanced > Peeling
+        const aCat = (a.type === 'vertical' && a.minSide >= 2) ? 0
+                   : (a.type === 'horizontal' && a.minSide >= 2) ? 1
+                   : 2;
+        const bCat = (b.type === 'vertical' && b.minSide >= 2) ? 0
+                   : (b.type === 'horizontal' && b.minSide >= 2) ? 1
+                   : 2;
+        if (aCat !== bCat) return aCat - bCat;
+
+        if (aCat <= 1) {
+          // Balanced: higher minSide wins
+          if (a.minSide !== b.minSide) return b.minSide - a.minSide;
+          if (b.total !== a.total) return b.total - a.total;
+        } else {
+          // Peeling fallback
+          const aEdge = a.before === 1 ? a.pos : (a.type === 'vertical' ? region.right - a.pos : region.bottom - a.pos);
+          const bEdge = b.before === 1 ? b.pos : (b.type === 'vertical' ? region.right - b.pos : region.bottom - b.pos);
+          if (aEdge !== bEdge) return aEdge - bEdge;
+        }
+      } else {
+        // No V-balanced: use peeling (top/left edge first)
+        const aPeel = a.minSide === 1 ? 1 : 0;
+        const bPeel = b.minSide === 1 ? 1 : 0;
+        if (aPeel !== bPeel) return bPeel - aPeel;
+        if (aPeel && bPeel) {
+          const aEdge = a.before === 1 ? a.pos : (a.type === 'vertical' ? region.right - a.pos : region.bottom - a.pos);
+          const bEdge = b.before === 1 ? b.pos : (b.type === 'vertical' ? region.right - b.pos : region.bottom - b.pos);
+          if (aEdge !== bEdge) return aEdge - bEdge;
+        }
+        if (b.total !== a.total) return b.total - a.total;
+        if (b.minSide !== a.minSide) return b.minSide - a.minSide;
       }
-
-      // Both non-peeling â†’ prefer higher total separation
-      if (b.total !== a.total) return b.total - a.total;
-      // More balanced
-      if (b.minSide !== a.minSide) return b.minSide - a.minSide;
 
       // Grain preference
       if (grainPref) {
@@ -847,6 +864,23 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim) {
         if (Math.abs(p.y + p.placedHeight - pos) <= kerf || Math.abs(p.y - pos) <= kerf) adj.push(i);
       }
     }
+    const trimRegion = computeWasteTrimRegion(type, pos);
+
+    // Guillotine check: skip if any piece straddles this cut within the region
+    let straddled = false;
+    for (const p of pieces) {
+      if (type === 'vertical') {
+        const inY = p.y < trimRegion.bottom && (p.y + p.placedHeight) > trimRegion.top;
+        const straddles = p.x < pos - kerf && (p.x + p.placedWidth) > pos + kerf;
+        if (inY && straddles) { straddled = true; break; }
+      } else {
+        const inX = p.x < trimRegion.right && (p.x + p.placedWidth) > trimRegion.left;
+        const straddles = p.y < pos - kerf && (p.y + p.placedHeight) > pos + kerf;
+        if (inX && straddles) { straddled = true; break; }
+      }
+    }
+    if (straddled) continue;
+
     cuts.push({
       number: cutNumber++,
       type,
@@ -855,7 +889,7 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim) {
       description: `Corte ${cutNumber - 1}: ${type === 'horizontal' ? 'Horizontal' : 'Vertical'} a ${pos}mm (Recorte)`,
       kerf,
       affectedPieceIndices: adj,
-      region: computeWasteTrimRegion(type, pos),
+      region: trimRegion,
     });
   }
 

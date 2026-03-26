@@ -1,9 +1,10 @@
 import { ListOrdered, ArrowLeftRight, ArrowUpDown, Minus, GripVertical } from 'lucide-react';
 
 const LEVEL_CONFIG = {
-  E1: { label: 'E1', className: 'level-e1', title: 'Corte primario' },
-  E2: { label: 'E2', className: 'level-e2', title: 'Corte secundario' },
-  REC: { label: 'REC', className: 'level-rec', title: 'Recorte / Trim' },
+  1: { label: 'E1', className: 'level-e1', title: 'Corte primario' },
+  2: { label: 'E2', className: 'level-e2', title: 'Corte secundario' },
+  3: { label: 'REC', className: 'level-rec', title: 'Recorte / Trim' },
+  4: { label: 'RET', className: 'level-ret', title: 'Separar retazo' },
 };
 
 export default function CutSequence({ cutSequence, hoveredCut, onHoverCut }) {
