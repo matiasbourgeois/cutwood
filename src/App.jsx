@@ -372,8 +372,8 @@ export default function App() {
             onChange={handleImportDB}
           />
           {result && (
-            <button className="btn btn-primary" onClick={handleExportPDF}>
-              <FileText size={15} /> PDF
+            <button className="btn btn-icon" onClick={handleExportPDF} title="Exportar PDF">
+              <FileText size={16} />
             </button>
           )}
           <button className="btn btn-outline" onClick={() => setShowRetazosModal(true)} title="Inventario de retazos">
