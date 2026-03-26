@@ -7,8 +7,8 @@ import jsPDF from 'jspdf';
 import { getPieceColor } from './colors.js';
 
 /* ── Color constants ── */
-const ACCENT = [108, 99, 255];        // #6c63ff
-const DARK = [26, 26, 46];            // #1a1a2e
+const ACCENT = [6, 182, 212];          // #06B6D4 cyan
+const DARK = [11, 17, 33];             // #0B1121 navy
 const MID = [80, 80, 100];
 const LIGHT_TEXT = [60, 60, 75];
 const MUTED = [140, 140, 160];

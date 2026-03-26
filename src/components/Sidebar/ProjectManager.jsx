@@ -7,7 +7,6 @@ const ProjectManager = forwardRef(function ProjectManager({ projectName, onNameC
   const [projects, setProjects] = useState(getAllProjects());
   const [showModal, setShowModal] = useState(false);
 
-  // Expose openHistory so Sidebar can trigger it
   useImperativeHandle(ref, () => ({
     openHistory: () => {
       setProjects(getAllProjects());
@@ -38,9 +37,14 @@ const ProjectManager = forwardRef(function ProjectManager({ projectName, onNameC
     setProjects(updated);
   };
 
+  const handleOpenHistory = () => {
+    setProjects(getAllProjects());
+    setShowModal(true);
+  };
+
   return (
     <>
-      {/* Inline project bar — no accordion */}
+      {/* Inline project bar — name + actions */}
       <div className="project-bar">
         <input
           type="text"
@@ -49,11 +53,15 @@ const ProjectManager = forwardRef(function ProjectManager({ projectName, onNameC
           value={projectName}
           onChange={(e) => onNameChange(e.target.value)}
         />
-        <button className="project-bar-btn project-bar-save" onClick={handleSave} title="Guardar">
-          <Save size={16} />
+        <button className="project-bar-btn project-bar-save" onClick={handleSave} title="Guardar proyecto">
+          <Save size={15} />
         </button>
         <button className="project-bar-btn project-bar-new" onClick={onNewProject} title="Nuevo mueble">
-          <FilePlus size={16} />
+          <FilePlus size={15} />
+        </button>
+        <button className="project-bar-btn project-bar-history" onClick={handleOpenHistory} title="Historial de muebles">
+          <FolderOpen size={15} />
+          {projects.length > 0 && <span className="project-bar-count">{projects.length}</span>}
         </button>
       </div>
 

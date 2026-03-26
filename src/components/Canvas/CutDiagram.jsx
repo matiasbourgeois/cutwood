@@ -180,7 +180,7 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
           </filter>
           <filter id="piece-highlight" x="-10%" y="-10%" width="120%" height="120%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur" />
-            <feFlood floodColor="#6c63ff" floodOpacity="0.4" result="color" />
+            <feFlood floodColor="#06B6D4" floodOpacity="0.4" result="color" />
             <feComposite in="color" in2="blur" operator="in" result="glow" />
             <feMerge>
               <feMergeNode in="glow" />
@@ -252,7 +252,7 @@ export default function CutDiagram({ board, allPieceIds, hoveredCut }) {
           const isDimmed = hoveredCut && !isAdjacent;
           const pieceOpacity = isDimmed ? 0.15 : 1;
           const strokeWidth = isAdjacent ? 2.5 : 1;
-          const strokeColor = isAdjacent ? '#a78bfa' : color.border;
+          const strokeColor = isAdjacent ? '#67E8F9' : color.border;
 
           return (
             <g

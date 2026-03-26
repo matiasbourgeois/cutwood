@@ -4,8 +4,8 @@
  */
 
 const PIECE_COLORS = [
-  { bg: 'rgba(108, 99, 255, 0.55)', border: '#6c63ff', text: '#e2e8f0' },
-  { bg: 'rgba(168, 85, 247, 0.55)', border: '#a855f7', text: '#e2e8f0' },
+  { bg: 'rgba(6, 182, 212, 0.55)', border: '#06b6d4', text: '#e2e8f0' },
+  { bg: 'rgba(14, 165, 233, 0.55)', border: '#0ea5e9', text: '#e2e8f0' },
   { bg: 'rgba(16, 185, 129, 0.55)', border: '#10b981', text: '#e2e8f0' },
   { bg: 'rgba(245, 158, 11, 0.55)', border: '#f59e0b', text: '#1a1a2e' },
   { bg: 'rgba(239, 68, 68, 0.55)', border: '#ef4444', text: '#e2e8f0' },

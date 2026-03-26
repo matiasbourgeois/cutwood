@@ -74,12 +74,12 @@ export default function StatsPanel({ stats, currentBoard, pieces, stock }) {
         {edgeBandingMeters > 0 && (
           <div className="stats-grid" style={{ marginTop: '8px' }}>
             <div className="stat-card">
-              <div className="stat-value" style={{ color: '#a78bfa' }}>{edgeBandingMeters.toFixed(1)}m</div>
+              <div className="stat-value" style={{ color: '#67E8F9' }}>{edgeBandingMeters.toFixed(1)}m</div>
               <div className="stat-label">Tapacanto</div>
             </div>
             {hasCosts && (
               <div className="stat-card">
-                <div className="stat-value" style={{ color: '#a78bfa' }}>${edgeCost.toLocaleString('es-AR')}</div>
+                <div className="stat-value" style={{ color: '#67E8F9' }}>${edgeCost.toLocaleString('es-AR')}</div>
                 <div className="stat-label">Costo tapacanto</div>
               </div>
             )}
