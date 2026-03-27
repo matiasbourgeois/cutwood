@@ -18,6 +18,7 @@
 
 import { GuillotineBin } from './guillotine.js';
 import { MaxRectsBin } from './maxrects.js';
+import { runStripPack } from './stripPacker.js';
 
 const SORT_ORDERS = [
   'area-desc',
@@ -328,6 +329,46 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
     }
   }
 
+  
+  // ── Strip-based packing strategy ──
+  // Groups pieces by width into vertical strips for industry-standard cut sequences
+  const stripResult = runStripPack(expanded.map(p => ({ ...p })), stock, options);
+  if (stripResult.boards.length > 0) {
+    const stripBoardCount = stripResult.boards.length;
+    const stripTotalPiecesArea = stripResult.boards.reduce(
+      (sum, b) => sum + b.pieces.reduce((s, p) => s + p.placedWidth * p.placedHeight, 0), 0
+    );
+    const stripTotalStockArea = stripResult.boards.reduce((sum, b) => sum + b.stockWidth * b.stockHeight, 0);
+    const stripUtilization = stripTotalStockArea > 0 ? (stripTotalPiecesArea / stripTotalStockArea) * 100 : 0;
+
+    const stripScore = {
+      boards: stripBoardCount + stripResult.unfitted.length * 100,
+      waste: 100 - stripUtilization,
+    };
+
+    if (
+      stripScore.boards < bestScore.boards ||
+      (stripScore.boards === bestScore.boards && stripScore.waste < bestScore.waste)
+    ) {
+      bestScore = stripScore;
+      // Convert strip-pack boards to the format expected by the rest of the pipeline
+      bestResult = {
+        boards: stripResult.boards.map(b => ({
+          bin: { freeRects: [], getUtilization: () => stripUtilization, getWasteArea: () => stripTotalStockArea - stripTotalPiecesArea },
+          stockWidth: b.stockWidth,
+          stockHeight: b.stockHeight,
+          boardGrain: b.boardGrain || boardGrain,
+          pieces: b.pieces,
+        })),
+        unfitted: stripResult.unfitted,
+        consumedOffcutIds: [],
+        boardCount: stripBoardCount,
+        utilization: stripUtilization,
+        totalStockArea: stripTotalStockArea,
+      };
+    }
+  }
+
   for (const cfg of configs) {
     const clonedPieces = expanded.map(p => ({ ...p }));
 
@@ -627,7 +668,7 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
 
   const grain = board.boardGrain || 'none';
 
-  // â”€â”€ Collect unique cut positions from piece boundaries â”€â”€
+  // -- Collect unique cut positions from piece boundaries --
   const rawHCuts = new Set();
   const rawVCuts = new Set();
   for (const piece of pieces) {
@@ -643,7 +684,7 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
     ...vPositions.map(p => ({ type: 'vertical', pos: p })),
   ];
 
-  // â”€â”€ Helpers â”€â”€
+  // -- Helpers --
   function splitRegion(region, type, pos) {
     if (type === 'vertical') {
       return [
@@ -658,22 +699,7 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
     }
   }
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  // RECURSIVE DECOMPOSITION WITH PEELING PRIORITY
-  //
-  // At each level:
-  // 1. Get pieces in this region
-  // 2. Find ALL valid guillotine cuts where BOTH sides have pieces
-  // 3. Score: prefer peeling (1 piece on one side), then edge proximity
-  // 4. Emit best cut, split region, recurse on both halves
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-  const emitted = new Set();
-  const MAX_DEPTH = 30;
-
-  function recurse(region, depth) {
-    if (depth > MAX_DEPTH) return;
-
-    // Get pieces in this region
+  function getPiecesInRegion(region) {
     const rp = [];
     const rpIdx = [];
     for (let i = 0; i < pieces.length; i++) {
@@ -683,29 +709,51 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
       rp.push(p);
       rpIdx.push(i);
     }
-    if (rp.length <= 1) return; // 0 or 1 piece â†’ no cuts needed
+    return { rp, rpIdx };
+  }
 
-    // Find all valid guillotine cuts in this region
+  // ============================================================
+  // SLAB-AWARE RECURSIVE DECOMPOSITION
+  //
+  // Each recursive call operates on ONE physical slab.
+  // After emitting a cut, the slab splits into two sub-slabs.
+  // Edge/waste trim cuts are emitted WITHIN each slab so they
+  // never span across already-separated physical pieces.
+  // ============================================================
+  const emitted = new Set();
+  const MAX_DEPTH = 30;
+  const grainPref = grain === 'horizontal' ? 'horizontal' : grain === 'vertical' ? 'vertical' : null;
+
+  function recurse(region, depth) {
+    if (depth > MAX_DEPTH) return;
+
+    const { rp, rpIdx } = getPiecesInRegion(region);
+    if (rp.length === 0) return;
+
+    // Single piece: emit edge trims within THIS slab only
+    if (rp.length === 1) {
+      emitEdgeTrims(region, rp, rpIdx, depth);
+      return;
+    }
+
+    // Find valid guillotine cuts where BOTH sides have pieces
     const candidates = [];
-
     for (const { type, pos } of allPositions) {
-      // Must be within region bounds
       if (type === 'vertical' && (pos <= region.left || pos >= region.right)) continue;
       if (type === 'horizontal' && (pos <= region.top || pos >= region.bottom)) continue;
       if (emitted.has(`${type}_${pos}`)) continue;
 
-      // Check guillotine validity: no piece straddles this cut
+      // Guillotine check
       let valid = true;
       for (const p of rp) {
         if (type === 'vertical') {
-          if (p.x < pos - kerf && p.x + p.placedWidth > pos + kerf) { valid = false; break; }
+          if (p.x < pos && p.x + p.placedWidth > pos + kerf) { valid = false; break; }
         } else {
-          if (p.y < pos - kerf && p.y + p.placedHeight > pos + kerf) { valid = false; break; }
+          if (p.y < pos && p.y + p.placedHeight > pos + kerf) { valid = false; break; }
         }
       }
       if (!valid) continue;
 
-      // Count pieces on each side
       let before = 0, after = 0;
       const adj = [];
       for (let i = 0; i < rp.length; i++) {
@@ -721,7 +769,6 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
         }
       }
 
-      // â˜… THE CRITICAL RULE: BOTH sides must have at least 1 piece â˜…
       if (before === 0 || after === 0) continue;
 
       candidates.push({
@@ -731,40 +778,30 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
       });
     }
 
-    if (candidates.length === 0) return;
+    if (candidates.length === 0) {
+      // No structural cuts but multiple pieces - emit edge trims
+      emitEdgeTrims(region, rp, rpIdx, depth);
+      return;
+    }
 
-    // â”€â”€ Score candidates â”€â”€
-    // -- Option C Sort: V-balanced > H-balanced > Peeling --
-    // Industry standard: vertical rip cuts first, then horizontal crosscuts,
-    // then peeling for individual pieces at leaf level.
-    const grainPref = grain === 'horizontal' ? 'horizontal' : grain === 'vertical' ? 'vertical' : null;
-
+    // -- Option C Sort --
     candidates.sort((a, b) => {
-      // Check if any V-balanced candidate exists at this level
       const hasVBal = candidates.some(c => c.type === 'vertical' && c.minSide >= 2);
-
       if (hasVBal) {
-        // V-balanced mode: V-balanced > H-balanced > Peeling
         const aCat = (a.type === 'vertical' && a.minSide >= 2) ? 0
-                   : (a.type === 'horizontal' && a.minSide >= 2) ? 1
-                   : 2;
+                   : (a.type === 'horizontal' && a.minSide >= 2) ? 1 : 2;
         const bCat = (b.type === 'vertical' && b.minSide >= 2) ? 0
-                   : (b.type === 'horizontal' && b.minSide >= 2) ? 1
-                   : 2;
+                   : (b.type === 'horizontal' && b.minSide >= 2) ? 1 : 2;
         if (aCat !== bCat) return aCat - bCat;
-
         if (aCat <= 1) {
-          // Balanced: higher minSide wins
           if (a.minSide !== b.minSide) return b.minSide - a.minSide;
           if (b.total !== a.total) return b.total - a.total;
         } else {
-          // Peeling fallback
           const aEdge = a.before === 1 ? a.pos : (a.type === 'vertical' ? region.right - a.pos : region.bottom - a.pos);
           const bEdge = b.before === 1 ? b.pos : (b.type === 'vertical' ? region.right - b.pos : region.bottom - b.pos);
           if (aEdge !== bEdge) return aEdge - bEdge;
         }
       } else {
-        // No V-balanced: use peeling (top/left edge first)
         const aPeel = a.minSide === 1 ? 1 : 0;
         const bPeel = b.minSide === 1 ? 1 : 0;
         if (aPeel !== bPeel) return bPeel - aPeel;
@@ -776,21 +813,16 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
         if (b.total !== a.total) return b.total - a.total;
         if (b.minSide !== a.minSide) return b.minSide - a.minSide;
       }
-
-      // Grain preference
       if (grainPref) {
         const ag = a.type === grainPref ? 0 : 1;
         const bg = b.type === grainPref ? 0 : 1;
         if (ag !== bg) return ag - bg;
       }
-
       return a.pos - b.pos;
     });
 
     const best = candidates[0];
     emitted.add(`${best.type}_${best.pos}`);
-
-    // Determine level for display (cap at 3)
     const level = Math.min(depth + 1, 3);
 
     cuts.push({
@@ -804,94 +836,78 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
       region: { left: region.left, right: region.right, top: region.top, bottom: region.bottom },
     });
 
-    // Split and recurse into both halves
+    // Split and recurse into EACH sub-slab
     const subRegions = splitRegion(region, best.type, best.pos);
     for (const sub of subRegions) {
       recurse(sub, depth + 1);
     }
   }
 
+  // -- Edge/waste trims within a SINGLE physical slab --
+  function emitEdgeTrims(region, rp, rpIdx, depth) {
+    // Process edge trims ONE AT A TIME.
+    // After each trim that splits the slab, recurse into sub-slabs.
+    for (const { type, pos } of allPositions) {
+      const key = `${type}_${pos}`;
+      if (emitted.has(key)) continue;
+      if (type === 'vertical' && (pos <= region.left || pos >= region.right)) continue;
+      if (type === 'horizontal' && (pos <= region.top || pos >= region.bottom)) continue;
+
+      // No piece may straddle this cut within THIS slab
+      let straddled = false;
+      for (const p of rp) {
+        if (type === 'vertical') {
+          if (p.x < pos && (p.x + p.placedWidth) > pos + kerf) { straddled = true; break; }
+        } else {
+          if (p.y < pos && (p.y + p.placedHeight) > pos + kerf) { straddled = true; break; }
+        }
+      }
+      if (straddled) continue;
+
+      // At least one piece in this slab must touch this cut
+      let touches = false;
+      const adj = [];
+      for (let i = 0; i < rp.length; i++) {
+        const p = rp[i];
+        if (type === 'vertical') {
+          if (Math.abs(p.x + p.placedWidth - pos) <= kerf || Math.abs(p.x - pos) <= kerf ||
+              Math.abs(p.x - pos - kerf) <= kerf) { touches = true; adj.push(rpIdx[i]); }
+        } else {
+          if (Math.abs(p.y + p.placedHeight - pos) <= kerf || Math.abs(p.y - pos) <= kerf ||
+              Math.abs(p.y - pos - kerf) <= kerf) { touches = true; adj.push(rpIdx[i]); }
+        }
+      }
+      if (!touches) continue;
+
+      emitted.add(key);
+      cuts.push({
+        number: cutNumber++,
+        type,
+        position: pos,
+        level: 3,
+        description: `Corte ${cutNumber - 1}: ${type === 'horizontal' ? 'Horizontal' : 'Vertical'} a ${pos}mm (Recorte)`,
+        kerf,
+        affectedPieceIndices: adj,
+        region: { left: region.left, right: region.right, top: region.top, bottom: region.bottom },
+      });
+
+      // After emitting this trim, split the slab and recurse for remaining trims
+      const subRegions = splitRegion(region, type, pos);
+      for (const sub of subRegions) {
+        const { rp: subRp, rpIdx: subRpIdx } = getPiecesInRegion(sub);
+        if (subRp.length > 0) {
+          emitEdgeTrims(sub, subRp, subRpIdx, depth);
+        }
+      }
+      return; // Stop processing this slab's trims — sub-slabs handle the rest
+    }
+  }
+
   const fullBoard = { left: 0, right: board.stockWidth, top: 0, bottom: board.stockHeight };
   recurse(fullBoard, 0);
-
-  // ── Helper: compute region for waste trim cuts from adjacent pieces ──
-  function computeWasteTrimRegion(cutType, cutPos) {
-    let minTop = board.stockHeight, maxBottom = 0;
-    let minLeft = board.stockWidth, maxRight = 0;
-    let found = false;
-
-    for (const p of pieces) {
-      if (cutType === 'vertical') {
-        const touchesLeft = Math.abs(p.x + p.placedWidth - cutPos) <= kerf;
-        const touchesRight = Math.abs(p.x - cutPos - kerf) <= kerf || Math.abs(p.x - cutPos) <= kerf;
-        if (touchesLeft || touchesRight) {
-          minTop = Math.min(minTop, p.y);
-          maxBottom = Math.max(maxBottom, p.y + p.placedHeight);
-          minLeft = Math.min(minLeft, p.x);
-          maxRight = Math.max(maxRight, p.x + p.placedWidth);
-          found = true;
-        }
-      } else {
-        const touchesAbove = Math.abs(p.y + p.placedHeight - cutPos) <= kerf;
-        const touchesBelow = Math.abs(p.y - cutPos - kerf) <= kerf || Math.abs(p.y - cutPos) <= kerf;
-        if (touchesAbove || touchesBelow) {
-          minTop = Math.min(minTop, p.y);
-          maxBottom = Math.max(maxBottom, p.y + p.placedHeight);
-          minLeft = Math.min(minLeft, p.x);
-          maxRight = Math.max(maxRight, p.x + p.placedWidth);
-          found = true;
-        }
-      }
-    }
-
-    if (!found) {
-      return { left: 0, right: board.stockWidth, top: 0, bottom: board.stockHeight };
-    }
-    return { left: minLeft, right: maxRight, top: minTop, bottom: maxBottom };
-  }
-
-  // â”€â”€ Waste trim: any remaining positions not emitted â”€â”€
-  for (const { type, pos } of allPositions) {
-    const key = `${type}_${pos}`;
-    if (emitted.has(key)) continue;
-    emitted.add(key);
-    const adj = [];
-    for (let i = 0; i < pieces.length; i++) {
-      const p = pieces[i];
-      if (type === 'vertical') {
-        if (Math.abs(p.x + p.placedWidth - pos) <= kerf || Math.abs(p.x - pos) <= kerf) adj.push(i);
-      } else {
-        if (Math.abs(p.y + p.placedHeight - pos) <= kerf || Math.abs(p.y - pos) <= kerf) adj.push(i);
-      }
-    }
-    const trimRegion = computeWasteTrimRegion(type, pos);
-
-    // Guillotine check: skip if any piece straddles this cut within the region
-    let straddled = false;
-    for (const p of pieces) {
-      if (type === 'vertical') {
-        const inY = p.y < trimRegion.bottom && (p.y + p.placedHeight) > trimRegion.top;
-        const straddles = p.x < pos - kerf && (p.x + p.placedWidth) > pos + kerf;
-        if (inY && straddles) { straddled = true; break; }
-      } else {
-        const inX = p.x < trimRegion.right && (p.x + p.placedWidth) > trimRegion.left;
-        const straddles = p.y < pos - kerf && (p.y + p.placedHeight) > pos + kerf;
-        if (inX && straddles) { straddled = true; break; }
-      }
-    }
-    if (straddled) continue;
-
-    cuts.push({
-      number: cutNumber++,
-      type,
-      position: pos,
-      level: 3,
-      description: `Corte ${cutNumber - 1}: ${type === 'horizontal' ? 'Horizontal' : 'Vertical'} a ${pos}mm (Recorte)`,
-      kerf,
-      affectedPieceIndices: adj,
-      region: trimRegion,
-    });
-  }
-
   return cuts;
 }
+
+
+
+
