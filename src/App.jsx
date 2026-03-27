@@ -28,6 +28,57 @@ const EXAMPLE_PROJECT = {
   options: { kerf: 3, edgeTrim: 5, allowRotation: true },
 };
 
+const EXAMPLE_ESCRITORIO = {
+  id: 'ejemplo_escritorio',
+  name: 'Escritorio Home Office',
+  pieces: [
+    { id: 'e1',  name: 'Tapa',         width: 1400, height: 600, quantity: 1, grain: 'horizontal', edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e2',  name: 'Lateral Izq',  width: 720,  height: 600, quantity: 1, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e3',  name: 'Lateral Der',  width: 720,  height: 600, quantity: 1, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e4',  name: 'Estante',      width: 400,  height: 300, quantity: 3, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e5',  name: 'Respaldo',     width: 1400, height: 400, quantity: 1, grain: 'horizontal', edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e6',  name: 'Cajonera Lat', width: 450,  height: 120, quantity: 4, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e7',  name: 'Frente Cajón', width: 400,  height: 180, quantity: 2, grain: 'horizontal', edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'e8',  name: 'Fondo Cajón',  width: 380,  height: 100, quantity: 2, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+  ],
+  stock: { width: 2750, height: 1830, thickness: 18, quantity: 5, grain: 'none' },
+  options: { kerf: 3, edgeTrim: 5, allowRotation: true },
+};
+
+const EXAMPLE_PLACARD = {
+  id: 'ejemplo_placard',
+  name: 'Placard Ropero 3 Cuerpos',
+  pieces: [
+    { id: 'p1',  name: 'Lateral',      width: 2400, height: 580, quantity: 4, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'p2',  name: 'Techo/Piso',   width: 860,  height: 580, quantity: 6, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'p3',  name: 'Estante',      width: 860,  height: 580, quantity: 9, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'p4',  name: 'División Vert',width: 1200, height: 580, quantity: 2, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'p5',  name: 'Puerta',       width: 2380, height: 440, quantity: 3, grain: 'vertical',   edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'p6',  name: 'Zócalo',       width: 880,  height: 80,  quantity: 3, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+  ],
+  stock: { width: 2750, height: 1830, thickness: 18, quantity: 15, grain: 'none' },
+  options: { kerf: 3, edgeTrim: 5, allowRotation: false },
+};
+
+const EXAMPLE_COCINA = {
+  id: 'ejemplo_cocina',
+  name: 'Cocina Módulos Bajos',
+  pieces: [
+    { id: 'c1',  name: 'Lateral Bajo', width: 720,  height: 560, quantity: 6, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c2',  name: 'Piso Bajo',    width: 560,  height: 560, quantity: 3, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c3',  name: 'Techo Bajo',   width: 560,  height: 560, quantity: 3, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c4',  name: 'Frente Cajón', width: 560,  height: 165, quantity: 6, grain: 'horizontal', edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c5',  name: 'Lateral Alto', width: 2200, height: 580, quantity: 4, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c6',  name: 'Techo Alto',   width: 580,  height: 580, quantity: 2, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c7',  name: 'Estante Alto', width: 580,  height: 580, quantity: 4, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+    { id: 'c8',  name: 'Zócalo',       width: 580,  height: 100, quantity: 3, grain: 'none',       edgeBanding: { top: false, bottom: false, left: false, right: false } },
+  ],
+  stock: { width: 2750, height: 1830, thickness: 18, quantity: 15, grain: 'none' },
+  options: { kerf: 3, edgeTrim: 5, allowRotation: true },
+};
+
+const ALL_EXAMPLES = [EXAMPLE_PROJECT, EXAMPLE_ESCRITORIO, EXAMPLE_PLACARD, EXAMPLE_COCINA];
+
 const DEFAULT_STOCK = {
   width: 2750,
   height: 1830,
@@ -89,11 +140,13 @@ export default function App() {
     localStorage.setItem('cutwood-theme', theme);
   }, [theme]);
 
-  // Ensure example project always exists in history
+  // Ensure all example projects always exist in history
   useEffect(() => {
     const projects = getAllProjects();
-    if (!projects.find(p => p.id === 'ejemplo_modular')) {
-      saveProject(EXAMPLE_PROJECT);
+    for (const example of ALL_EXAMPLES) {
+      if (!projects.find(p => p.id === example.id)) {
+        saveProject(example);
+      }
     }
   }, []);
 

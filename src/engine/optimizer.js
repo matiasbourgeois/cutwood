@@ -299,7 +299,8 @@ function placeSingle(piece, boards, stock, options, binType, heuristic, splitRul
 // Ã¢â€â‚¬Ã¢â€â‚¬ Main entry point Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = []) {
-  const MIN_OFFCUT_SIZE = 50;
+  const MIN_OFFCUT_FOR_CUTS = 0;    // Cut sequence sees ALL waste areas (even small ones)
+  const MIN_OFFCUT_DISPLAY = 100;   // Only show retazos >= 100mm as reusable to the user
   const boardGrain = stock.grain || 'none';
 
   // Step 1: Expand pieces once
@@ -514,14 +515,20 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
   const { kerf = 3, edgeTrim = 0 } = options;
 
   const boardResults = allBoards.map((board, idx) => {
-    const usableOffcuts = board.bin.freeRects
-      .filter(r => r.width >= MIN_OFFCUT_SIZE && r.height >= MIN_OFFCUT_SIZE)
+    // All offcuts (down to 0mm) — used by cut sequence to see ALL waste boundaries
+    const allOffcutsForCuts = board.bin.freeRects
+      .filter(r => r.width >= MIN_OFFCUT_FOR_CUTS && r.height >= MIN_OFFCUT_FOR_CUTS)
       .map(r => ({
         width: Math.round(r.width),
         height: Math.round(r.height),
         x: Math.round(r.x),
         y: Math.round(r.y),
       }));
+
+    // Only show retazos >= 100mm as reusable in the UI
+    const displayOffcuts = allOffcutsForCuts.filter(
+      r => r.width >= MIN_OFFCUT_DISPLAY && r.height >= MIN_OFFCUT_DISPLAY
+    );
 
     return {
       boardIndex: idx,
@@ -530,10 +537,10 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
       isOffcut: board.isOffcut || false,
       offcutSource: board.offcutSource || null,
       pieces: board.pieces,
-      cutSequence: generateHierarchicalCutSequence(board, kerf, edgeTrim, usableOffcuts),
+      cutSequence: generateHierarchicalCutSequence(board, kerf, edgeTrim, allOffcutsForCuts),
       utilization: board.bin.getUtilization(),
       wasteArea: board.bin.getWasteArea(),
-      offcuts: usableOffcuts,
+      offcuts: displayOffcuts,
     };
   });
 
@@ -753,7 +760,19 @@ function generateHierarchicalCutSequence(board, kerf, edgeTrim, offcuts = []) {
         positions.push({ type, pos });
       }
     }
-    return positions;
+
+    // Merge kerf-adjacent positions: if two positions of the same type
+    // are within 'kerf' mm of each other, keep only the first (they're the same physical cut)
+    const vRaw = positions.filter(p => p.type === 'vertical').sort((a, b) => a.pos - b.pos);
+    const hRaw = positions.filter(p => p.type === 'horizontal').sort((a, b) => a.pos - b.pos);
+    const merged = [];
+    for (const list of [vRaw, hRaw]) {
+      for (let i = 0; i < list.length; i++) {
+        if (i > 0 && list[i].pos - list[i - 1].pos <= kerf) continue;
+        merged.push(list[i]);
+      }
+    }
+    return merged;
   }
 
   function categorizeCut(rp, rpIdx, type, pos) {

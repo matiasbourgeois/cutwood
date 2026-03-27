@@ -64,9 +64,9 @@ export default function CutSequence({ cutSequence, hoveredCut, onHoverCut }) {
                         : <><ArrowUpDown size={12} /> Vertical</>
                       }
                     </span>
-                    {levelConfig && (
-                      <span className={`cut-level-badge ${levelConfig.className}`} title={levelConfig.title}>
-                        {levelConfig.label}
+                    {cut.description?.includes('surplus') && (
+                      <span className="cut-level-badge level-ret" title="Separa un retazo reutilizable">
+                        RET
                       </span>
                     )}
                   </div>
