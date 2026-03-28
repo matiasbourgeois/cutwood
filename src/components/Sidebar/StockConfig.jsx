@@ -9,8 +9,9 @@ const PRESETS = [
   { name: 'Compact 1830×1830', width: 1830, height: 1830 },
 ];
 
-export default function StockConfig({ stock, options, onStockChange, onOptionsChange }) {
+export default function StockConfig({ stock, options, onStockChange, onOptionsChange, saveNewOffcuts, onSaveNewOffcutsChange, consumeUsedOffcuts, onConsumeUsedOffcutsChange }) {
   const [isOpen, setIsOpen] = useState(true);
+  const [materialOpen, setMaterialOpen] = useState(false);
 
   // Derive the select value from actual stock dimensions
   const selectedPreset = useMemo(() => {
@@ -158,6 +159,40 @@ export default function StockConfig({ stock, options, onStockChange, onOptionsCh
 
           <div className="stock-divider"></div>
 
+          {/* Offcut toggles */}
+          <div className="offcut-toggles">
+            <div className="offcut-toggle-row">
+              <div className="offcut-toggle-label">
+                <span>Guardar retazos</span>
+              </div>
+              <button
+                className={`toggle-switch ${saveNewOffcuts ? 'toggle-on' : ''}`}
+                onClick={() => onSaveNewOffcutsChange(!saveNewOffcuts)}
+                title={saveNewOffcuts ? 'Los retazos generados se guardan automáticamente' : 'Los retazos NO se guardarán'}
+                role="switch"
+                aria-checked={saveNewOffcuts}
+              >
+                <span className="toggle-knob" />
+              </button>
+            </div>
+            <div className="offcut-toggle-row">
+              <div className="offcut-toggle-label">
+                <span>Consumir retazos usados</span>
+              </div>
+              <button
+                className={`toggle-switch ${consumeUsedOffcuts ? 'toggle-on' : ''}`}
+                onClick={() => onConsumeUsedOffcutsChange(!consumeUsedOffcuts)}
+                title={consumeUsedOffcuts ? 'Los retazos seleccionados se eliminan al usarlos' : 'Los retazos NO se eliminarán al usarlos'}
+                role="switch"
+                aria-checked={consumeUsedOffcuts}
+              >
+                <span className="toggle-knob" />
+              </button>
+            </div>
+          </div>
+
+          <div className="stock-divider"></div>
+
           {/* Pricing */}
           <div className="stock-grid">
             <div className="stock-field">
@@ -178,6 +213,61 @@ export default function StockConfig({ stock, options, onStockChange, onOptionsCh
                 <span className="stock-unit">$/m</span>
               </div>
             </div>
+          </div>
+
+          {/* Material del tablero — colapsable */}
+          <div className="stock-divider"></div>
+          <div className="material-sub-section">
+            <button
+              className="material-sub-header"
+              onClick={() => setMaterialOpen(o => !o)}
+            >
+              <span>Identificación del material</span>
+              <span className={`material-sub-chevron ${materialOpen ? 'open' : ''}`}>
+                <ChevronDown size={12} />
+              </span>
+            </button>
+            {materialOpen && (
+              <div className="material-sub-body">
+                <div className="material-grid">
+                  <div className="material-field">
+                    <label>Marca</label>
+                    <input
+                      type="text"
+                      className="material-input"
+                      placeholder="Ej: Egger, Masisa"
+                      value={stock.brand || ''}
+                      onChange={(e) => updateStock('brand', e.target.value)}
+                    />
+                  </div>
+                  <div className="material-field">
+                    <label>Color / Acabado</label>
+                    <input
+                      type="text"
+                      className="material-input"
+                      placeholder="Ej: Blanco Ártico"
+                      value={stock.color || ''}
+                      onChange={(e) => updateStock('color', e.target.value)}
+                    />
+                  </div>
+                  <div className="material-field">
+                    <label>Material</label>
+                    <input
+                      type="text"
+                      className="material-input"
+                      placeholder="Ej: Melamina, MDF"
+                      value={stock.material || ''}
+                      onChange={(e) => updateStock('material', e.target.value)}
+                    />
+                  </div>
+                </div>
+                {(stock.brand || stock.color || stock.material) && (
+                  <div className="material-preview">
+                    {[stock.brand, stock.color, stock.material].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

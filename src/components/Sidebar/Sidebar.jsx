@@ -18,6 +18,10 @@ export default function Sidebar({
   onCalculate,
   isCalculating,
   showToast,
+  saveNewOffcuts,
+  onSaveNewOffcutsChange,
+  consumeUsedOffcuts,
+  onConsumeUsedOffcutsChange,
   style,
 }) {
   const projectRef = useRef(null);
@@ -43,6 +47,10 @@ export default function Sidebar({
           onStockChange={onStockChange}
           options={options}
           onOptionsChange={onOptionsChange}
+          saveNewOffcuts={saveNewOffcuts}
+          onSaveNewOffcutsChange={onSaveNewOffcutsChange}
+          consumeUsedOffcuts={consumeUsedOffcuts}
+          onConsumeUsedOffcutsChange={onConsumeUsedOffcutsChange}
         />
 
         {/* 3. Pieces list — SECOND */}

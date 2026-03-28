@@ -3310,3 +3310,226 @@ input:focus, select:focus, textarea:focus {
     min-height: 32px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════ */
+/* TOGGLE SWITCH — iOS-style premium                              */
+/* ══════════════════════════════════════════════════════════════ */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 38px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--border-primary);
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  transition: background var(--transition-normal), box-shadow var(--transition-normal);
+  flex-shrink: 0;
+  outline: none;
+}
+
+.toggle-switch:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.toggle-switch.toggle-on {
+  background: var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.toggle-knob {
+  position: absolute;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: transform var(--transition-normal);
+  pointer-events: none;
+}
+
+.toggle-switch.toggle-on .toggle-knob {
+  transform: translateX(18px);
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* OFFCUT TOGGLES — Rows in StockConfig                          */
+/* ══════════════════════════════════════════════════════════════ */
+.offcut-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+
+.offcut-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 4px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.offcut-toggle-row:hover {
+  background: var(--bg-surface-hover);
+}
+
+.offcut-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.offcut-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* CONFIRM MODAL — Danger variant                                 */
+/* ══════════════════════════════════════════════════════════════ */
+.confirm-icon-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.confirm-btn-danger {
+  background: var(--danger) !important;
+  border-color: transparent !important;
+  color: white !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirm-btn-danger:hover {
+  opacity: 0.88;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* RETAZOS — Page info label                                     */
+/* ══════════════════════════════════════════════════════════════ */
+.retazos-page-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 4px 0;
+  text-align: right;
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* MATERIAL SUB-SECTION — Collapsible in StockConfig             */
+/* ══════════════════════════════════════════════════════════════ */
+.material-sub-section {
+  margin-top: 2px;
+}
+
+.material-sub-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.material-sub-header:hover {
+  color: var(--accent-primary);
+  background: var(--bg-surface-hover);
+}
+
+.material-sub-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  transition: transform var(--transition-normal);
+}
+
+.material-sub-chevron.open {
+  transform: rotate(180deg);
+}
+
+.material-sub-body {
+  padding: 6px 2px 4px;
+  animation: fadeSlideDown 0.18s ease;
+}
+
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.material-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.material-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.material-field label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.material-input {
+  width: 100%;
+  padding: 5px 7px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.material-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.material-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.material-preview {
+  margin-top: 8px;
+  padding: 5px 10px;
+  background: rgba(6, 182, 212, 0.06);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-primary);
+  letter-spacing: 0.1px;
+}

@@ -34,6 +34,9 @@ const DEFAULT_STOCK = {
   thickness: 18,
   quantity: 10,
   grain: 'none',
+  brand: '',
+  color: '',
+  material: '',
 };
 
 const DEFAULT_OPTIONS = {
@@ -81,13 +84,19 @@ export default function App() {
   const [confirmType, setConfirmType] = useState(null); // 'reoptimize' | 'offcuts'
   const [pendingOptimize, setPendingOptimize] = useState(null);
   const [showRetazosModal, setShowRetazosModal] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('cutwood-theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('cutwood-theme') || 'light');
+  const [saveNewOffcuts, setSaveNewOffcuts] = useState(() => localStorage.getItem('cutwood-save-offcuts') !== 'false');
+  const [consumeUsedOffcuts, setConsumeUsedOffcuts] = useState(() => localStorage.getItem('cutwood-consume-offcuts') !== 'false');
 
   // Apply theme to DOM
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('cutwood-theme', theme);
   }, [theme]);
+
+  // Persist offcut preferences
+  useEffect(() => { localStorage.setItem('cutwood-save-offcuts', String(saveNewOffcuts)); }, [saveNewOffcuts]);
+  useEffect(() => { localStorage.setItem('cutwood-consume-offcuts', String(consumeUsedOffcuts)); }, [consumeUsedOffcuts]);
 
   // Ensure example project always exists in history
   useEffect(() => {
@@ -259,22 +268,22 @@ export default function App() {
                 height: oc.height,
                 thickness: parentOffcut?.thickness || stock.thickness || 18,
                 grain: parentOffcut?.grain || stock.grain || 'none',
-                brand: parentOffcut?.brand || '',
-                color: parentOffcut?.color || '',
-                material: parentOffcut?.material || '',
+                brand: parentOffcut?.brand || stock.brand || '',
+                color: parentOffcut?.color || stock.color || '',
+                material: parentOffcut?.material || stock.material || '',
                 source: `${projectName || 'Proyecto'} - ${board.isOffcut ? 'Retazo' : 'Tablero'} ${idx + 1}`,
               });
             });
           }
         });
 
-        // Consume used offcuts
-        if (optimResult.consumedOffcutIds && optimResult.consumedOffcutIds.length > 0) {
+        // Consume used offcuts (solo si el toggle está ON)
+        if (consumeUsedOffcuts && optimResult.consumedOffcutIds && optimResult.consumedOffcutIds.length > 0) {
           consumeOffcuts(optimResult.consumedOffcutIds);
         }
 
-        // Save new offcuts
-        if (newOffcuts.length > 0) {
+        // Save new offcuts (solo si el toggle está ON)
+        if (saveNewOffcuts && newOffcuts.length > 0) {
           const updated = saveOffcuts(newOffcuts);
           setOffcuts(updated);
         } else {
@@ -288,8 +297,10 @@ export default function App() {
           parts.push(`+ ${optimResult.stats.totalOffcutBoards} retazo(s) usados`);
         }
         parts.push(`${optimResult.stats.overallUtilization}% aprov.`);
-        if (newOffcuts.length > 0) {
+        if (saveNewOffcuts && newOffcuts.length > 0) {
           parts.push(`📦 ${newOffcuts.length} retazo(s) guardados`);
+        } else if (!saveNewOffcuts && newOffcuts.length > 0) {
+          parts.push(`📦 ${newOffcuts.length} retazo(s) sin guardar (toggle OFF)`);
         }
 
         if (optimResult.unfitted.length > 0) {
@@ -429,6 +440,10 @@ export default function App() {
           onCalculate={handleCalculate}
           isCalculating={isCalculating}
           showToast={showToast}
+          saveNewOffcuts={saveNewOffcuts}
+          onSaveNewOffcutsChange={setSaveNewOffcuts}
+          consumeUsedOffcuts={consumeUsedOffcuts}
+          onConsumeUsedOffcutsChange={setConsumeUsedOffcuts}
           style={{ width: `${sidebarWidth}%`, minWidth: `${sidebarWidth}%` }}
         />
 

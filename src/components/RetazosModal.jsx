@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Package, Search, X, Pencil, Trash2, Check, Plus } from 'lucide-react';
+import { Package, Search, X, Pencil, Trash2, Check, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const ITEMS_PER_PAGE = 8;
 
 export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onClear, onToggleSelect, onAdd }) {
   const [search, setSearch] = useState('');
@@ -10,6 +12,8 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [page, setPage] = useState(1);
   const [newOffcut, setNewOffcut] = useState({
     name: '', width: '', height: '', thickness: 18, grain: 'none', brand: '', color: '', material: 'Melamina', notes: '',
   });
@@ -34,6 +38,13 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
       return true;
     });
   }, [offcuts, search, filterBrand, filterColor, filterThickness, filterGrain]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  // Reset page when filters change
+  const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
 
   const selectedCount = offcuts.filter(o => o.selected).length;
   const selectedArea = offcuts.filter(o => o.selected).reduce((s, o) => s + (o.area || 0), 0);
@@ -111,25 +122,30 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
               className="retazos-search-input"
             />
           </div>
-          <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className="retazos-filter-select">
+          <select value={filterBrand} onChange={handleFilterChange(setFilterBrand)} className="retazos-filter-select">
             <option value="">Todas las marcas</option>
             {brands.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
-          <select value={filterColor} onChange={(e) => setFilterColor(e.target.value)} className="retazos-filter-select">
+          <select value={filterColor} onChange={handleFilterChange(setFilterColor)} className="retazos-filter-select">
             <option value="">Todos los colores</option>
             {colors.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select value={filterThickness} onChange={(e) => setFilterThickness(e.target.value)} className="retazos-filter-select">
+          <select value={filterThickness} onChange={handleFilterChange(setFilterThickness)} className="retazos-filter-select">
             <option value="">Todo espesor</option>
             {thicknesses.map(t => <option key={t} value={t}>{t}mm</option>)}
           </select>
-          <select value={filterGrain} onChange={(e) => setFilterGrain(e.target.value)} className="retazos-filter-select">
+          <select value={filterGrain} onChange={handleFilterChange(setFilterGrain)} className="retazos-filter-select">
             <option value="">Toda veta</option>
             <option value="none">Sin veta</option>
             <option value="horizontal">Horizontal</option>
             <option value="vertical">Vertical</option>
           </select>
         </div>
+        {filtered.length > 0 && (
+          <div className="retazos-page-info">
+            Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} de {filtered.length} retazo{filtered.length !== 1 ? 's' : ''}
+          </div>
+        )}
 
         {/* Table */}
         <div className="retazos-table-container">
@@ -164,7 +180,7 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o) => (
+                {paginated.map((o) => (
                   editingId === o.id ? (
                     <tr key={o.id} className="retazos-row retazos-row-editing">
                       <td></td>
@@ -226,6 +242,27 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
           )}
         </div>
 
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="modal-pagination">
+            <button className="pagination-btn" disabled={currentPage <= 1} onClick={() => setPage(p => p - 1)}>
+              <ChevronLeft size={14} />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i + 1}
+                className={`pagination-btn ${currentPage === i + 1 ? 'active' : ''}`}
+                onClick={() => setPage(i + 1)}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button className="pagination-btn" disabled={currentPage >= totalPages} onClick={() => setPage(p => p + 1)}>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Datalists for autocomplete */}
         <datalist id="brands-list">{brands.map(b => <option key={b} value={b} />)}</datalist>
         <datalist id="colors-list">{colors.map(c => <option key={c} value={c} />)}</datalist>
@@ -260,7 +297,7 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
               <Plus size={14} /> Agregar Manual
             </button>
             {offcuts.length > 0 && (
-              <button className="retazos-footer-btn retazos-clear-btn" onClick={onClear}>
+              <button className="retazos-footer-btn retazos-clear-btn" onClick={() => setShowClearConfirm(true)}>
                 <Trash2 size={13} /> Limpiar todos
               </button>
             )}
@@ -278,6 +315,27 @@ export default function RetazosModal({ offcuts, onClose, onUpdate, onRemove, onC
           </div>
         </div>
       </div>
+
+      {/* Confirm clear modal */}
+      {showClearConfirm && (
+        <div className="confirm-overlay" onClick={() => setShowClearConfirm(false)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-icon-wrap confirm-icon-danger">
+              <Trash2 size={28} />
+            </div>
+            <div className="confirm-title">¿Eliminar todos los retazos?</div>
+            <div className="confirm-message">
+              Vas a eliminar <strong>{offcuts.length} retazo{offcuts.length !== 1 ? 's' : ''}</strong> del inventario. Esta acción no se puede deshacer.
+            </div>
+            <div className="confirm-actions">
+              <button className="confirm-btn-cancel" onClick={() => setShowClearConfirm(false)}>Cancelar</button>
+              <button className="confirm-btn-confirm confirm-btn-danger" onClick={() => { onClear(); setShowClearConfirm(false); }}>
+                <Trash2 size={14} /> Limpiar todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
