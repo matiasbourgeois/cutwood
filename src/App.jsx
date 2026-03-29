@@ -8,25 +8,178 @@ import CutDiagram from './components/Canvas/CutDiagram';
 import StatsPanel from './components/Canvas/StatsPanel';
 import CutSequence from './components/Canvas/CutSequence';
 import { optimizeCuts } from './engine/optimizer';
-import { exportToPDF } from './utils/pdfExport';
 import { exportAllProjects, importProjects, getAllProjects, saveProject, getAllOffcuts, saveOffcuts, removeOffcut, clearOffcuts, consumeOffcuts, updateOffcut, addManualOffcut, toggleOffcutSelection, getSelectedOffcuts } from './utils/storage';
 
-const EXAMPLE_PROJECT = {
-  id: 'ejemplo_modular',
-  name: 'Modular Ejemplo',
-  pieces: [
-    { id: 'r1',  name: 'Pieza 1',  width: 1694, height: 300, quantity: 3, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r9',  name: 'Pieza 9',  width: 345,  height: 280, quantity: 2, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r20', name: 'Pieza 20', width: 2620, height: 100, quantity: 1, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r21', name: 'Pieza 21', width: 2620, height: 100, quantity: 1, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r22', name: 'Pieza 22', width: 2620, height: 100, quantity: 1, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r8',  name: 'Pieza 8',  width: 522,  height: 331, quantity: 2, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r11', name: 'Pieza 11', width: 522,  height: 331, quantity: 2, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-    { id: 'r13', name: 'Pieza 13', width: 534,  height: 280, quantity: 1, grain: 'none', edgeBanding: { top: false, bottom: false, left: false, right: false } },
-  ],
-  stock: { width: 2750, height: 1830, thickness: 18, quantity: 10, grain: 'none' },
-  options: { kerf: 3, edgeTrim: 5, allowRotation: true },
-};
+const eb0 = { top: false, bottom: false, left: false, right: false };
+const STOCK_STD  = { width: 2750, height: 1830, thickness: 18, quantity: 20, grain: 'none' };
+const STOCK_GRAN = { width: 3660, height: 1830, thickness: 18, quantity: 20, grain: 'none' };
+const STOCK_VETA = { width: 2750, height: 1830, thickness: 18, quantity: 20, grain: 'vertical' };
+const OPT_STD    = { kerf: 3, edgeTrim: 5, allowRotation: true };
+const OPT_NOVROT = { kerf: 3, edgeTrim: 5, allowRotation: false };
+
+const PRESET_PROJECTS = [
+  {
+    id: 'preset_cocina_simple', name: '01 · Cocina Modular Simple',
+    pieces: [
+      { id:'p1', name:'Costado alto',  width:1830, height:560, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Tapa/fondo',    width:560,  height:550, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Estante',       width:550,  height:350, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'Puerta alta',   width:720,  height:396, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p5', name:'Puerta baja',   width:560,  height:396, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p6', name:'Zócalo',        width:550,  height:120, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p7', name:'Cajón frente',  width:520,  height:200, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p8', name:'Cajón fondo',   width:520,  height:150, quantity:4, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_grilla_identicos', name: '02 · Grilla Masiva de Idénticos',
+    pieces: [
+      { id:'p1', name:'Frente 500×500', width:500,  height:500, quantity:81, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Zócalo 2000×100',width:2000, height:100, quantity:21, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_piezas_gigantes', name: '03 · Piezas Gigantes',
+    pieces: [
+      { id:'p1', name:'Panel trasero',  width:2600, height:1700, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Tapa larga',     width:2600, height:560,  quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Base ancha',     width:2600, height:560,  quantity:1, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_tiras_zocalos', name: '04 · Tiras y Zócalos',
+    pieces: [
+      { id:'p1', name:'Tira 2720×80',  width:2720, height:80,  quantity:8, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Tira 2720×100', width:2720, height:100, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Tira 2720×120', width:2720, height:120, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'Tira 2720×150', width:2720, height:150, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p5', name:'Tira 1364×80',  width:1364, height:80,  quantity:6, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_armario_3cuerpos', name: '05 · Armario 3 Cuerpos',
+    pieces: [
+      { id:'p1',  name:'Costado lateral', width:2200, height:570, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'p2',  name:'Costado interno', width:2200, height:570, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'p3',  name:'Techo',           width:570,  height:880, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'p4',  name:'Base',            width:570,  height:880, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'p5',  name:'Estante fijo',    width:554,  height:880, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p6',  name:'Puerta 1/2',      width:1100, height:600, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p7',  name:'Cajón frente',    width:570,  height:200, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p8',  name:'Cajón lateral',   width:460,  height:200, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p9',  name:'Cajón fondo',     width:450,  height:200, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p10', name:'Zócalo frontal',  width:870,  height:100, quantity:3, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_micro_piezas', name: '06 · Micro Piezas (140 uds)',
+    pieces: [
+      { id:'p1', name:'200×150', width:200, height:150, quantity:30, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'180×120', width:180, height:120, quantity:30, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'150×100', width:150, height:100, quantity:40, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'300×200', width:300, height:200, quantity:20, grain:'none', edgeBanding:eb0 },
+      { id:'p5', name:'250×180', width:250, height:180, quantity:20, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_mix_extremo', name: '07 · Mix Extremo de Tamaños',
+    pieces: [
+      { id:'p1',  name:'Panel 1830×560', width:1830, height:560, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'p2',  name:'Panel 1200×800', width:1200, height:800, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'p3',  name:'Panel 900×700',  width:900,  height:700, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'p4',  name:'Panel 750×500',  width:750,  height:500, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'p5',  name:'Panel 600×450',  width:600,  height:450, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p6',  name:'Panel 500×400',  width:500,  height:400, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'p7',  name:'Panel 400×350',  width:400,  height:350, quantity:5, grain:'none', edgeBanding:eb0 },
+      { id:'p8',  name:'Tira 2600×150',  width:2600, height:150, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'p9',  name:'Tira 2200×200',  width:2200, height:200, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'p10', name:'Tira 1800×120',  width:1800, height:120, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p11', name:'Pieza 220×180',  width:220,  height:180, quantity:8, grain:'none', edgeBanding:eb0 },
+      { id:'p12', name:'Pieza 1694×300', width:1694, height:300, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'p13', name:'Pieza 345×280',  width:345,  height:280, quantity:4, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_cajoneria', name: '08 · Cajonería Estándar (84 uds)',
+    pieces: [
+      { id:'p1', name:'Frente cajón grande',  width:800, height:200, quantity:12, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Lateral cajón grande', width:500, height:200, quantity:24, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Fondo cajón grande',   width:786, height:200, quantity:12, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'Base cajón grande',    width:800, height:500, quantity:12, grain:'none', edgeBanding:eb0 },
+      { id:'p5', name:'Frente cajón chico',   width:400, height:150, quantity: 8, grain:'none', edgeBanding:eb0 },
+      { id:'p6', name:'Lateral cajón chico',  width:450, height:150, quantity:16, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_veta_estricta', name: '09 · Veta Estricta (sin rotación)',
+    pieces: [
+      { id:'p1', name:'Panel vertical',   width:1830, height:400, quantity:4, grain:'vertical', edgeBanding:eb0 },
+      { id:'p2', name:'Puerta vertical',  width:720,  height:400, quantity:6, grain:'vertical', edgeBanding:eb0 },
+      { id:'p3', name:'Estante vertical', width:800,  height:350, quantity:8, grain:'vertical', edgeBanding:eb0 },
+      { id:'p4', name:'Tapa vertical',    width:600,  height:580, quantity:4, grain:'vertical', edgeBanding:eb0 },
+      { id:'p5', name:'Costado vertical', width:720,  height:560, quantity:4, grain:'vertical', edgeBanding:eb0 },
+    ], stock: STOCK_VETA, options: OPT_NOVROT,
+  },
+  {
+    id: 'preset_multitablero', name: '10 · Multi-tablero (8 tableros)',
+    pieces: [
+      { id:'p1', name:'Costado',  width:2200, height:580, quantity:12, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Techo',    width:580,  height:900, quantity:6,  grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Estante',  width:554,  height:880, quantity:18, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'Puerta',   width:1100, height:420, quantity:12, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_biblioteca', name: '12 · Biblioteca 5 Cuerpos (92%)',
+    pieces: [
+      { id:'p1', name:'Costado',    width:1800, height:300, quantity:12, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Techo/Base', width:300,  height:800, quantity:10, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Estante',    width:300,  height:786, quantity:30, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'Trasero',    width:1800, height:800, quantity:5,  grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  {
+    id: 'preset_tablero_jumbo', name: '14 · Tablero Jumbo 3660×1830',
+    pieces: [
+      { id:'p1', name:'Panel corrido', width:3500, height:400, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p2', name:'Tira larga',    width:3500, height:120, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'p3', name:'Puerta larga',  width:2400, height:600, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'p4', name:'Lateral',       width:2000, height:580, quantity:4, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_GRAN, options: OPT_STD,
+  },
+  {
+    id: 'preset_proyecto_real', name: '15 · Proyecto Real — Cocina + Placard',
+    pieces: [
+      { id:'k1',  name:'Costado cocina alto',  width:2100, height:560, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'k2',  name:'Estante cocina',        width:554,  height:560, quantity:8, grain:'none', edgeBanding:eb0 },
+      { id:'k3',  name:'Puerta cocina alta',    width:680,  height:396, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'k4',  name:'Puerta cocina baja',    width:540,  height:396, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'k5',  name:'Zócalo cocina',         width:550,  height:100, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'k6',  name:'Cajón cocina F',        width:520,  height:200, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'k7',  name:'Cajón cocina L',        width:450,  height:200, quantity:12,grain:'none', edgeBanding:eb0 },
+      { id:'cl1', name:'Costado placard',        width:2200, height:600, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'cl2', name:'Estante placard',        width:580,  height:900, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'cl3', name:'Puerta placard',         width:2200, height:450, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'cl4', name:'Cajón placard F',        width:860,  height:200, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'cl5', name:'Cajón placard L',        width:470,  height:200, quantity:8, grain:'none', edgeBanding:eb0 },
+      { id:'cl6', name:'Separador vertical',     width:1050, height:580, quantity:4, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+  // Mantener ejemplo original
+  {
+    id: 'ejemplo_modular', name: 'Modular Ejemplo',
+    pieces: [
+      { id:'r1',  name:'Pieza 1',  width:1694, height:300, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'r9',  name:'Pieza 9',  width:345,  height:280, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'r20', name:'Pieza 20', width:2620, height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'r21', name:'Pieza 21', width:2620, height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'r22', name:'Pieza 22', width:2620, height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'r8',  name:'Pieza 8',  width:522,  height:331, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'r11', name:'Pieza 11', width:522,  height:331, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'r13', name:'Pieza 13', width:534,  height:280, quantity:1, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
+];
 
 const DEFAULT_STOCK = {
   width: 2750,
@@ -98,11 +251,14 @@ export default function App() {
   useEffect(() => { localStorage.setItem('cutwood-save-offcuts', String(saveNewOffcuts)); }, [saveNewOffcuts]);
   useEffect(() => { localStorage.setItem('cutwood-consume-offcuts', String(consumeUsedOffcuts)); }, [consumeUsedOffcuts]);
 
-  // Ensure example project always exists in history
+  // Seed all preset projects into history on first load
   useEffect(() => {
     const projects = getAllProjects();
-    if (!projects.find(p => p.id === 'ejemplo_modular')) {
-      saveProject(EXAMPLE_PROJECT);
+    const existingIds = new Set(projects.map(p => p.id));
+    for (const preset of PRESET_PROJECTS) {
+      if (!existingIds.has(preset.id)) {
+        saveProject(preset);
+      }
     }
   }, []);
 
@@ -356,8 +512,14 @@ export default function App() {
 
   const handleExportPDF = useCallback(() => {
     if (!result) return;
-    exportToPDF(result, projectName, pieces, stock, options);
-  }, [result, projectName, pieces, stock, options]);
+    
+    // Guardar payload masivo temporalmente y abrir pestaña
+    const payload = { result, pieces, stock, options, projectName, theme };
+    sessionStorage.setItem('cutwood-print-payload', JSON.stringify(payload));
+    
+    // Abre el reporte nivel dios en una pestaña nueva
+    window.open('/report', '_blank');
+  }, [result, pieces, stock, options, projectName, theme]);
 
   const currentBoard = result?.boards?.[currentBoardIndex] || null;
   const allPieceIds = [...new Set(pieces.map((p) => p.id))];

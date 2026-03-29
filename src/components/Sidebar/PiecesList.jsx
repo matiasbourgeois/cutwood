@@ -1,17 +1,94 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Ruler, Clipboard, Copy, Trash2, GripVertical, Columns, Rows, ChevronDown } from 'lucide-react';
 
-export default function PiecesList({ pieces, onChange, showToast }) {
+export default function PiecesList({ pieces, onChange, showToast, grow }) {
   const [isOpen, setIsOpen] = useState(true);
   const [edgeBandingPiece, setEdgeBandingPiece] = useState(null);
+
+  // ── Refs for scroll + focus management ──
+  const listRef      = useRef(null);
+  const justAddedRef = useRef(false);
+
+  // Auto-scroll to bottom + focus CANT of newly added row
+  useEffect(() => {
+    if (!justAddedRef.current) return;
+    justAddedRef.current = false;
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollTop = list.scrollHeight;
+    const rows = list.querySelectorAll('[data-piece-index]');
+    const last = rows[rows.length - 1];
+    if (last) {
+      const inputs = last.querySelectorAll('input');
+      if (inputs[0]) { inputs[0].focus(); inputs[0].select(); }
+    }
+  }, [pieces.length]);
+
+  // ── Arrow-key navigation between cells ──
+  // Columns: 0=qty, 1=largo, 2=ancho, 3=name
+  const handleKeyDown = useCallback((e, rowIndex, colIndex) => {
+    const TOTAL_COLS = 4;
+    let targetRow = rowIndex;
+    let targetCol = colIndex;
+    let shouldNavigate = false;
+
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'Enter':
+        if (rowIndex < pieces.length - 1) {
+          targetRow = rowIndex + 1;
+          shouldNavigate = true;
+        }
+        break;
+      case 'ArrowUp':
+        if (rowIndex > 0) {
+          targetRow = rowIndex - 1;
+          shouldNavigate = true;
+        }
+        break;
+      case 'ArrowRight':
+        // Number inputs: always navigate. Text input: only at end of string
+        if (colIndex < 3 || e.target.selectionStart === e.target.value.length) {
+          if (colIndex < TOTAL_COLS - 1) {
+            targetCol = colIndex + 1;
+            shouldNavigate = true;
+          }
+        }
+        break;
+      case 'ArrowLeft':
+        // Number inputs: always navigate. Text input: only at start of string
+        if (colIndex < 3 || e.target.selectionStart === 0) {
+          if (colIndex > 0) {
+            targetCol = colIndex - 1;
+            shouldNavigate = true;
+          }
+        }
+        break;
+      default:
+        return;
+    }
+
+    if (!shouldNavigate) return;
+    e.preventDefault();
+
+    const list = listRef.current;
+    if (!list) return;
+    const allRows = list.querySelectorAll('[data-piece-index]');
+    const targetRowEl = allRows[targetRow];
+    if (!targetRowEl) return;
+    const inputs = targetRowEl.querySelectorAll('input');
+    if (inputs[targetCol]) {
+      inputs[targetCol].focus();
+      inputs[targetCol].select();
+    }
+  }, [pieces.length]);
 
   // ── Clipboard Paste Handler (Ctrl+V from Excel/Sheets) ──
   useEffect(() => {
     const handlePaste = (e) => {
       const text = e.clipboardData?.getData('text/plain');
-      if (!text || !text.includes('\t')) return; // Not tab-separated → let browser handle it
+      if (!text || !text.includes('\t')) return;
 
-      // Tab-separated data detected → intercept even if focused on an input
       e.preventDefault();
       e.stopPropagation();
 
@@ -20,7 +97,6 @@ export default function PiecesList({ pieces, onChange, showToast }) {
       );
       if (rows.length === 0) return;
 
-      // Detect header row
       let startIdx = 0;
       const headerKeywords = ['nombre', 'largo', 'ancho', 'cant', 'width', 'height', 'name', 'qty', 'obs'];
       if (rows[0].some(c => headerKeywords.includes(c.toLowerCase()))) {
@@ -32,39 +108,29 @@ export default function PiecesList({ pieces, onChange, showToast }) {
         const cols = rows[i];
         if (cols.length < 3) continue;
 
-        // Column order: Cant | Largo | Ancho | Nombre/Obs
         const quantity = parseInt(cols[0]) || 1;
-        const width = parseInt(cols[1]);
-        const height = parseInt(cols[2]);
-        const name = cols[3] || `Pieza ${newPieces.length + 1}`;
+        const width    = parseInt(cols[1]);
+        const height   = parseInt(cols[2]);
+        const name     = cols[3] || `Pieza ${newPieces.length + 1}`;
 
         if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) continue;
 
         newPieces.push({
           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-          name,
-          width,
-          height,
-          quantity,
+          name, width, height, quantity,
           grain: 'none',
           edgeBanding: { top: false, bottom: false, left: false, right: false },
         });
       }
 
       if (newPieces.length > 0) {
-        // Detect which row the user is focused on
         const active = document.activeElement;
         const rowEl = active?.closest?.('[data-piece-index]');
         const focusedIndex = rowEl ? parseInt(rowEl.dataset.pieceIndex) : 0;
 
-        let updated;
-        if (focusedIndex === 0) {
-          // First row or no focus → replace entire list
-          updated = newPieces;
-        } else {
-          // Keep pieces before focusedIndex, overwrite from there
-          updated = [...pieces.slice(0, focusedIndex), ...newPieces];
-        }
+        const updated = focusedIndex === 0
+          ? newPieces
+          : [...pieces.slice(0, focusedIndex), ...newPieces];
 
         onChange(updated);
         if (document.activeElement) document.activeElement.blur();
@@ -106,6 +172,7 @@ export default function PiecesList({ pieces, onChange, showToast }) {
   };
 
   const addPiece = () => {
+    justAddedRef.current = true;
     onChange([
       ...pieces,
       {
@@ -133,13 +200,13 @@ export default function PiecesList({ pieces, onChange, showToast }) {
   };
 
   const getGrainIcon = (grain) => {
-    if (grain === 'vertical') return <Columns size={16} />;
+    if (grain === 'vertical')   return <Columns size={16} />;
     if (grain === 'horizontal') return <Rows size={16} />;
     return <GripVertical size={16} />;
   };
 
   const getGrainTitle = (grain) => {
-    if (grain === 'vertical') return 'Veta vertical ↕ — fibras de arriba a abajo';
+    if (grain === 'vertical')   return 'Veta vertical ↕ — fibras de arriba a abajo';
     if (grain === 'horizontal') return 'Veta horizontal ↔ — fibras de lado a lado';
     return 'Sin veta — puede rotar libremente';
   };
@@ -151,19 +218,25 @@ export default function PiecesList({ pieces, onChange, showToast }) {
   };
 
   return (
-    <div className="section-card fade-in">
+    <div className={`section-card fade-in${grow ? ' section-card-grow' : ''}`}>
       <div className="section-header" onClick={() => setIsOpen(!isOpen)}>
         <div className="section-header-left">
           <span className="section-icon"><Ruler size={16} /></span>
           <span className="section-title">Piezas de Corte</span>
           <span className="section-badge">{pieces.length}</span>
-          <span className="paste-hint" title="Copiá celdas de Excel/Sheets y pegá con Ctrl+V"><Clipboard size={10} style={{display:'inline',verticalAlign:'text-bottom'}} /> Ctrl+V</span>
+          <span
+            className="paste-hint"
+            title="Copiá celdas de Excel/Sheets y pegá con Ctrl+V"
+          >
+            <Clipboard size={10} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> Ctrl+V
+          </span>
         </div>
         <span className={`section-toggle ${isOpen ? 'open' : ''}`}><ChevronDown size={16} /></span>
       </div>
 
       {isOpen && (
         <div className="section-body">
+          {/* Column headers */}
           <div className="piece-header">
             <span className="piece-col-qty">Cant.</span>
             <span className="piece-col-num">Largo</span>
@@ -172,8 +245,8 @@ export default function PiecesList({ pieces, onChange, showToast }) {
             <span className="piece-col-actions"></span>
           </div>
 
-          {/* Piece rows */}
-          <div className="piece-list">
+          {/* Scrollable piece rows */}
+          <div className="piece-list" ref={listRef}>
             {pieces.map((piece, i) => {
               const isInvalid = !piece.width || !piece.height || !piece.quantity || piece.quantity <= 0;
               return (
@@ -185,6 +258,7 @@ export default function PiecesList({ pieces, onChange, showToast }) {
                       min="1"
                       value={piece.quantity}
                       onChange={(e) => updatePiece(i, 'quantity', e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, i, 0)}
                     />
                     <input
                       className="piece-col-num"
@@ -193,6 +267,7 @@ export default function PiecesList({ pieces, onChange, showToast }) {
                       min="1"
                       value={piece.width}
                       onChange={(e) => updatePiece(i, 'width', e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, i, 1)}
                     />
                     <input
                       className="piece-col-num"
@@ -201,6 +276,7 @@ export default function PiecesList({ pieces, onChange, showToast }) {
                       min="1"
                       value={piece.height}
                       onChange={(e) => updatePiece(i, 'height', e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, i, 2)}
                     />
                     <input
                       className="piece-col-name"
@@ -208,6 +284,7 @@ export default function PiecesList({ pieces, onChange, showToast }) {
                       placeholder="Nombre/Obs..."
                       value={piece.name}
                       onChange={(e) => updatePiece(i, 'name', e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, i, 3)}
                     />
                     <div className="piece-col-actions">
                       <button
@@ -237,28 +314,27 @@ export default function PiecesList({ pieces, onChange, showToast }) {
                     </div>
                   </div>
 
-                  {/* Edge banding popup */}
                   {edgeBandingPiece === i && (
                     <div className="edge-banding-popup">
                       <div className="edge-banding-label">Tapacanto</div>
                       <div className="edge-banding-grid">
                         <button
-                          className={`edge-btn edge-top ${(piece.edgeBanding?.top) ? 'active' : ''}`}
+                          className={`edge-btn edge-top ${piece.edgeBanding?.top ? 'active' : ''}`}
                           onClick={() => toggleEdge(i, 'top')}
                           title="Borde superior"
                         >↑ Sup</button>
                         <button
-                          className={`edge-btn edge-bottom ${(piece.edgeBanding?.bottom) ? 'active' : ''}`}
+                          className={`edge-btn edge-bottom ${piece.edgeBanding?.bottom ? 'active' : ''}`}
                           onClick={() => toggleEdge(i, 'bottom')}
                           title="Borde inferior"
                         >↓ Inf</button>
                         <button
-                          className={`edge-btn edge-left ${(piece.edgeBanding?.left) ? 'active' : ''}`}
+                          className={`edge-btn edge-left ${piece.edgeBanding?.left ? 'active' : ''}`}
                           onClick={() => toggleEdge(i, 'left')}
                           title="Borde izquierdo"
                         >← Izq</button>
                         <button
-                          className={`edge-btn edge-right ${(piece.edgeBanding?.right) ? 'active' : ''}`}
+                          className={`edge-btn edge-right ${piece.edgeBanding?.right ? 'active' : ''}`}
                           onClick={() => toggleEdge(i, 'right')}
                           title="Borde derecho"
                         >→ Der</button>

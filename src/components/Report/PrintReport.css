@@ -1,0 +1,369 @@
+/* src/components/Report/PrintReport.css */
+
+/* Ocultar en la pantalla normal (sólo se ve en modo impresión) */
+.print-root {
+  display: none;
+  font-family: 'Inter', system-ui, sans-serif;
+  box-sizing: border-box;
+}
+
+/* AL ACTIVAR IMPRESIÓN */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+
+  /* Ocultar por completo la App normal y mostrar el PrintRoot */
+  .app-layout { display: none !important; }
+  .print-root { display: block !important; }
+
+  /* Mágico: FORZA LOS COLORES, SOMBRAS Y BACKGROUNDS */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body, html {
+    margin: 0;
+    padding: 0;
+    background: var(--print-bg) !important;
+  }
+}
+
+/* ── VARIABLES DE TEMA (DISEÑO DIOS) ── */
+.print-theme-light {
+  --print-bg: #FFFFFF;
+  --print-surface: #F8FAFC;
+  --print-surface-alt: #F1F5F9;
+  --print-border: #E2E8F0;
+  --print-text: #0F172A;
+  --print-text-muted: #64748B;
+  --print-accent: #0284C7;
+  --print-accent-glow: rgba(2, 132, 199, 0.1);
+  --print-success: #10B981;
+  --print-warning: #F59E0B;
+  --print-danger: #EF4444;
+}
+
+.print-theme-dark {
+  --print-bg: #090E17;  
+  --print-surface: #131E32;
+  --print-surface-alt: #0D1627;
+  --print-border: #1E293B;
+  --print-text: #F8FAFC;
+  --print-text-muted: #94A3B8;
+  --print-accent: #06B6D4;
+  --print-accent-glow: rgba(6, 182, 212, 0.15);
+  --print-success: #10B981;
+  --print-warning: #F59E0B;
+  --print-danger: #EF4444;
+}
+
+/* ── ESTRUCTURA PÁGINA A4 ── */
+.print-root .print-page {
+  width: 100%;
+  margin-bottom: 0px !important;
+  page-break-after: always;
+  break-after: page;
+  position: relative;
+  background: var(--print-bg);
+  color: var(--print-text);
+  overflow: visible !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.print-root .print-page-fixed {
+  height: 198mm !important;
+  overflow: hidden !important;
+}
+
+.print-root .print-page-auto {
+  height: auto !important;
+  min-height: 198mm !important;
+  display: block !important;
+}
+
+.print-root .print-table-container {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.print-root .print-table tr, .print-root .print-seq-table tr, .print-root .print-retazo-card {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.print-root .print-page:last-child {
+  page-break-after: auto;
+  break-after: auto;
+}
+
+/* ── COMPONENTES GLOBALES DEL REPORTE ── */
+.print-header-bar {
+  height: 6px;
+  width: 100%;
+  background: var(--print-accent);
+  box-shadow: 0 2px 10px var(--print-accent-glow);
+}
+
+.print-footer {
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--print-border);
+  padding-top: 6px;
+  font-size: 10px;
+  color: var(--print-text-muted);
+}
+
+/* HERO BLOCK PORTADA */
+.print-hero {
+  margin: 16px;
+  padding: 30px;
+  border-radius: 12px;
+  background: var(--print-surface);
+  border: 1px solid var(--print-border);
+  display: flex;
+  justify-content: space-between;
+  box-shadow: 0 10px 40px var(--print-accent-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Lineas decorativas de ciber-carpintería */
+.print-hero::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -5%;
+  width: 400px;
+  height: 200%;
+  background: linear-gradient(90deg, transparent, var(--print-accent-glow), transparent);
+  transform: rotate(35deg);
+  pointer-events: none;
+}
+
+.print-hero h1 {
+  font-size: 48px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--print-text);
+  letter-spacing: -1px;
+}
+.print-hero h2 {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--print-accent);
+  margin: 8px 0 20px 0;
+}
+.print-hero-specs {
+  font-size: 12px;
+  color: var(--print-text-muted);
+  display: flex;
+  gap: 16px;
+}
+
+.print-badge-giant {
+  padding: 16px 24px;
+  border-radius: 12px;
+  text-align: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.print-badge-giant .value { font-size: 36px; font-weight: 800; }
+.print-badge-giant .label { font-size: 10px; font-weight: 600; letter-spacing: 1px; margin-top: 4px; opacity: 0.9; }
+
+/* Tarjetas de stats */
+.print-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin: 0 16px;
+}
+.print-stat-card {
+  background: var(--print-surface);
+  border: 1px solid var(--print-border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.print-stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--print-accent);
+}
+.print-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--print-text);
+  margin-bottom: 4px;
+}
+.print-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--print-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tablas */
+.print-table-container {
+  margin: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--print-border);
+}
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.print-table th {
+  background: var(--print-surface-alt);
+  color: var(--print-text);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--print-border);
+}
+.print-table td {
+  padding: 10px 12px;
+  color: var(--print-text-muted);
+  border-bottom: 1px solid var(--print-border);
+}
+.print-table tr:nth-child(even) td {
+  background: rgba(0,0,0, 0.02);
+}
+.print-theme-dark .print-table tr:nth-child(even) td {
+  background: rgba(255,255,255, 0.02);
+}
+
+.print-row-highlight {
+  font-weight: 600;
+  color: var(--print-text) !important;
+}
+
+/* Layout 2 Columnas (Diagrama SVG + Secuencia) */
+.print-diagram-layout {
+  display: flex;
+  gap: 20px;
+  margin: 16px;
+  flex: 1; /* Ocupa el resto de la hoja */
+  min-height: 0;
+}
+
+.print-diagram-left {
+  flex: 0 0 65%;
+  background: var(--print-surface-alt);
+  border: 1px solid var(--print-border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Fuerza al SVG nativo de CutDiagram a usar 100% perfecto */
+.print-diagram-left .cut-diagram-svg-wrapper {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  /* El canvas-wrapper interno del componente también necesita crecer */
+}
+
+.print-diagram-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Secuencia super compacta */
+.print-seq-table {
+  width: 100%;
+  font-size: 9px;
+  border-collapse: collapse;
+}
+.print-seq-table th {
+  background: var(--print-surface-alt);
+  padding: 6px;
+  text-align: left;
+  color: var(--print-text);
+}
+.print-seq-table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--print-border);
+  color: var(--print-text-muted);
+}
+.seq-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  font-size: 8px;
+}
+
+/* Retazos Miniaturas */
+.print-retazos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 16px;
+  margin: 16px;
+}
+.print-retazo-card {
+  background: var(--print-surface);
+  border: 1px solid var(--print-border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.print-retazo-visual {
+  width: 100%;
+  height: 60px;
+  background: rgba(245, 158, 11, 0.15); /* Amber claro */
+  border: 1px dashed var(--print-warning);
+  border-radius: 4px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.print-retazo-visual::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* Hatching diagonal muy sutil en CSS */
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    rgba(245, 158, 11, 0.3) 4px,
+    rgba(245, 158, 11, 0.3) 5px
+  );
+  border-radius: inherit;
+}
+.print-retazo-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--print-text);
+  background: var(--print-surface-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 10;
+}

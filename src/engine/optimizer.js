@@ -510,13 +510,64 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
     }
   }
 
+  // ── computeFreeRectsFromPlacements ──────────────────────────────────────────
+  // Fallback for packers that don't maintain freeRects (e.g. StripPack).
+  // Given the placed pieces, reconstructs the remaining free rectangles using
+  // guillotine-style subtraction, so retazos and cut sequences always work.
+  function computeFreeRectsFromPlacements(stockW, stockH, placedPieces, kerfMm, edgeTrimMm) {
+    // Work in internal coords (no edgeTrim offset — pieces already have it baked in)
+    let free = [{ x: 0, y: 0, width: stockW, height: stockH }];
+
+    for (const p of placedPieces) {
+      // Piece footprint (including kerf margin on all sides for splitting)
+      const px = Math.max(0, p.x - edgeTrimMm);
+      const py = Math.max(0, p.y - edgeTrimMm);
+      const pw = p.placedWidth  + kerfMm;
+      const ph = p.placedHeight + kerfMm;
+
+      const nextFree = [];
+      for (const r of free) {
+        // If no overlap, keep rect as-is
+        const noOverlap =
+          px >= r.x + r.width  ||
+          px + pw <= r.x       ||
+          py >= r.y + r.height ||
+          py + ph <= r.y;
+        if (noOverlap) { nextFree.push(r); continue; }
+
+        // Guillotine split: up to 4 sub-rects around the piece
+        // Left slice
+        if (px > r.x)
+          nextFree.push({ x: r.x, y: r.y, width: px - r.x, height: r.height });
+        // Right slice
+        if (px + pw < r.x + r.width)
+          nextFree.push({ x: px + pw, y: r.y, width: (r.x + r.width) - (px + pw), height: r.height });
+        // Top slice (between left/right columns)
+        if (py > r.y)
+          nextFree.push({ x: Math.max(r.x, px), y: r.y, width: Math.min(r.x + r.width, px + pw) - Math.max(r.x, px), height: py - r.y });
+        // Bottom slice (between left/right columns)
+        if (py + ph < r.y + r.height)
+          nextFree.push({ x: Math.max(r.x, px), y: py + ph, width: Math.min(r.x + r.width, px + pw) - Math.max(r.x, px), height: (r.y + r.height) - (py + ph) });
+      }
+      free = nextFree.filter(r => r.width > 0 && r.height > 0);
+    }
+
+    return free;
+  }
+
   // Step 3: Build final results
   const allBoards = bestResult.boards;
   const { kerf = 3, edgeTrim = 0 } = options;
 
   const boardResults = allBoards.map((board, idx) => {
+    // Get freeRects from the bin — or recompute if the packer didn't maintain them
+    // (StripPack returns bin.freeRects = [] — we fix this here permanently)
+    const rawFreeRects = (board.bin.freeRects && board.bin.freeRects.length > 0)
+      ? board.bin.freeRects
+      : computeFreeRectsFromPlacements(board.stockWidth, board.stockHeight, board.pieces, kerf, edgeTrim);
+
     // All offcuts (down to 0mm) — used by cut sequence to see ALL waste boundaries
-    const allOffcutsForCuts = board.bin.freeRects
+    const allOffcutsForCuts = rawFreeRects
       .filter(r => r.width >= MIN_OFFCUT_FOR_CUTS && r.height >= MIN_OFFCUT_FOR_CUTS)
       .map(r => ({
         width: Math.round(r.width),
@@ -543,6 +594,7 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
       offcuts: displayOffcuts,
     };
   });
+
 
   const expandedTotal = pieces.reduce((sum, p) => sum + (p.quantity || 1), 0);
   const placedCount = expandedTotal - bestResult.unfitted.length;

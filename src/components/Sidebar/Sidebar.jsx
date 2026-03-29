@@ -53,11 +53,12 @@ export default function Sidebar({
           onConsumeUsedOffcutsChange={onConsumeUsedOffcutsChange}
         />
 
-        {/* 3. Pieces list — SECOND */}
+        {/* 3. Pieces list — SECOND, flex-grows to fill remaining space */}
         <PiecesList
           pieces={pieces}
           onChange={onPiecesChange}
           showToast={showToast}
+          grow
         />
       </div>
 
