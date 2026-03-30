@@ -7,7 +7,7 @@ import RetazosModal from './components/RetazosModal';
 import CutDiagram from './components/Canvas/CutDiagram';
 import StatsPanel from './components/Canvas/StatsPanel';
 import CutSequence from './components/Canvas/CutSequence';
-import { optimizeCuts } from './engine/optimizer';
+import { useOptimizer } from './hooks/useOptimizer';
 import { exportAllProjects, importProjects, getAllProjects, saveProject, getAllOffcuts, saveOffcuts, removeOffcut, clearOffcuts, consumeOffcuts, updateOffcut, addManualOffcut, toggleOffcutSelection, getSelectedOffcuts } from './utils/storage';
 
 const eb0 = { top: false, bottom: false, left: false, right: false };
@@ -230,7 +230,9 @@ export default function App() {
   }, [options]);
   const [result, setResult] = useState(null);
   const [currentBoardIndex, setCurrentBoardIndex] = useState(0);
-  const [isCalculating, setIsCalculating] = useState(false);
+  const { optimize, cancel, isCalculating, progress, phase, mode: optimizerMode, setMode: setOptimizerMode } = useOptimizer();
+  const deepMode = optimizerMode === 'deep';
+  const onDeepModeChange = (val) => setOptimizerMode(val ? 'deep' : 'fast');
   const [toast, setToast] = useState(null);
   const [offcuts, setOffcuts] = useState(getAllOffcuts());
   const [showConfirm, setShowConfirm] = useState(false);
@@ -397,80 +399,66 @@ export default function App() {
     doOptimize(validPieces);
   }, [pieces, stock, options, offcuts, projectName]);
 
-  const doOptimize = useCallback((validPieces) => {
-    setIsCalculating(true);
+  const doOptimize = useCallback(async (validPieces) => {
+    try {
+      const selectedOff = offcuts.filter(o => o.selected);
+      const optimResult = await optimize(validPieces, stock, options, selectedOff);
+      setResult(optimResult);
+      setCurrentBoardIndex(0);
 
-    setTimeout(() => {
-      try {
-        const selectedOff = offcuts.filter(o => o.selected);
-        const optimResult = optimizeCuts(validPieces, stock, options, selectedOff);
-        setResult(optimResult);
-        setCurrentBoardIndex(0);
-
-        // Save new offcuts from results
-        const newOffcuts = [];
-        optimResult.boards.forEach((board, idx) => {
-          if (board.offcuts && board.offcuts.length > 0) {
-            // If this board was an offcut, inherit brand/color/material from the parent
-            const parentOffcut = board.isOffcut && board.offcutId
-              ? selectedOff.find(o => o.id === board.offcutId)
-              : null;
-            board.offcuts.forEach((oc, ocIdx) => {
-              const boardLabel = board.isOffcut ? `R${idx + 1}` : `T${idx + 1}`;
-              const letterSuffix = String.fromCharCode(65 + ocIdx); // A, B, C...
-              newOffcuts.push({
-                name: `Retazo ${boardLabel}-${letterSuffix}`,
-                width: oc.width,
-                height: oc.height,
-                thickness: parentOffcut?.thickness || stock.thickness || 18,
-                grain: parentOffcut?.grain || stock.grain || 'none',
-                brand: parentOffcut?.brand || stock.brand || '',
-                color: parentOffcut?.color || stock.color || '',
-                material: parentOffcut?.material || stock.material || '',
-                source: `${projectName || 'Proyecto'} - ${board.isOffcut ? 'Retazo' : 'Tablero'} ${idx + 1}`,
-              });
+      // Save new offcuts from results
+      const newOffcuts = [];
+      optimResult.boards.forEach((board, idx) => {
+        if (board.offcuts && board.offcuts.length > 0) {
+          const parentOffcut = board.isOffcut && board.offcutId
+            ? selectedOff.find(o => o.id === board.offcutId)
+            : null;
+          board.offcuts.forEach((oc, ocIdx) => {
+            const boardLabel = board.isOffcut ? `R${idx + 1}` : `T${idx + 1}`;
+            const letterSuffix = String.fromCharCode(65 + ocIdx); // A, B, C...
+            newOffcuts.push({
+              name: `Retazo ${boardLabel}-${letterSuffix}`,
+              width: oc.width,
+              height: oc.height,
+              thickness: parentOffcut?.thickness || stock.thickness || 18,
+              grain: parentOffcut?.grain || stock.grain || 'none',
+              brand: parentOffcut?.brand || stock.brand || '',
+              color: parentOffcut?.color || stock.color || '',
+              material: parentOffcut?.material || stock.material || '',
+              source: `${projectName || 'Proyecto'} - ${board.isOffcut ? 'Retazo' : 'Tablero'} ${idx + 1}`,
             });
-          }
-        });
+          });
+        }
+      });
 
-        // Consume used offcuts (solo si el toggle está ON)
-        if (consumeUsedOffcuts && optimResult.consumedOffcutIds && optimResult.consumedOffcutIds.length > 0) {
-          consumeOffcuts(optimResult.consumedOffcutIds);
-        }
+      if (consumeUsedOffcuts && optimResult.consumedOffcutIds?.length > 0)
+        consumeOffcuts(optimResult.consumedOffcutIds);
 
-        // Save new offcuts (solo si el toggle está ON)
-        if (saveNewOffcuts && newOffcuts.length > 0) {
-          const updated = saveOffcuts(newOffcuts);
-          setOffcuts(updated);
-        } else {
-          setOffcuts(getAllOffcuts());
-        }
+      if (saveNewOffcuts && newOffcuts.length > 0) {
+        const updated = saveOffcuts(newOffcuts);
+        setOffcuts(updated);
+      } else {
+        setOffcuts(getAllOffcuts());
+      }
 
-        // Build toast message
-        const parts = [];
-        parts.push(`✅ ${optimResult.stats.placedPieces} piezas en ${optimResult.stats.totalBoards} tablero(s)`);
-        if (optimResult.stats.totalOffcutBoards > 0) {
-          parts.push(`+ ${optimResult.stats.totalOffcutBoards} retazo(s) usados`);
-        }
-        parts.push(`${optimResult.stats.overallUtilization}% aprov.`);
-        if (saveNewOffcuts && newOffcuts.length > 0) {
-          parts.push(`📦 ${newOffcuts.length} retazo(s) guardados`);
-        } else if (!saveNewOffcuts && newOffcuts.length > 0) {
-          parts.push(`📦 ${newOffcuts.length} retazo(s) sin guardar (toggle OFF)`);
-        }
+      const parts = [`✅ ${optimResult.stats.placedPieces} piezas en ${optimResult.stats.totalBoards} tablero(s)`];
+      if (optimResult.stats.totalOffcutBoards > 0) parts.push(`+ ${optimResult.stats.totalOffcutBoards} retazo(s) usados`);
+      parts.push(`${optimResult.stats.overallUtilization}% aprov.`);
+      if (saveNewOffcuts && newOffcuts.length > 0) parts.push(`📦 ${newOffcuts.length} retazo(s) guardados`);
+      else if (!saveNewOffcuts && newOffcuts.length > 0) parts.push(`📦 ${newOffcuts.length} retazo(s) sin guardar (toggle OFF)`);
 
-        if (optimResult.unfitted.length > 0) {
-          showToast(`⚠️ ${optimResult.unfitted.length} pieza(s) no entraron`, 'warning');
-        } else {
-          showToast(parts.join(' — '));
-        }
-      } catch (err) {
+      if (optimResult.unfitted.length > 0) showToast(`⚠️ ${optimResult.unfitted.length} pieza(s) no entraron`, 'warning');
+      else showToast(parts.join(' — '));
+
+    } catch (err) {
+      if (err?.message !== 'cancelled') {
         console.error('Optimization error:', err);
         showToast('Error al optimizar — revisá los datos', 'error');
       }
-      setIsCalculating(false);
-    }, 50);
-  }, [pieces, stock, options, offcuts, projectName]);
+    }
+  }, [optimize, offcuts, stock, options, projectName, saveNewOffcuts, consumeUsedOffcuts]);
+
+
 
   const handleLoadProject = useCallback((project) => {
     setProjectName(project.name || '');
@@ -606,6 +594,8 @@ export default function App() {
           onSaveNewOffcutsChange={setSaveNewOffcuts}
           consumeUsedOffcuts={consumeUsedOffcuts}
           onConsumeUsedOffcutsChange={setConsumeUsedOffcuts}
+          deepMode={deepMode}
+          onDeepModeChange={onDeepModeChange}
           style={{ width: `${sidebarWidth}%`, minWidth: `${sidebarWidth}%` }}
         />
 
@@ -618,6 +608,32 @@ export default function App() {
 
         {/* Main canvas */}
         <main className="canvas-area">
+
+          {/* ── Deep Optimization Progress Overlay ── */}
+          {isCalculating && deepMode && (
+            <div className="deep-progress-overlay">
+              <div className="deep-progress-card">
+                <div className="deep-progress-header">
+                  <span className="deep-progress-icon">🔍</span>
+                  <span className="deep-progress-title">Optimización Profunda</span>
+                </div>
+                <div className="deep-progress-bar-track">
+                  <div
+                    className="deep-progress-bar-fill"
+                    style={{ width: `${progress ?? 0}%` }}
+                  />
+                </div>
+                <div className="deep-progress-meta">
+                  <span className="deep-progress-pct">{Math.round(progress ?? 0)}%</span>
+                  <span className="deep-progress-phase">{phase}</span>
+                </div>
+                <button className="deep-progress-cancel" onClick={cancel}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {result && result.boards.length > 0 ? (
             <>
               {/* Toolbar with sheet navigation */}

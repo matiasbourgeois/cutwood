@@ -82,7 +82,7 @@ function getStripSortComparator(order) {
   }
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Create the right bin type Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Create the right bin type ──────────────────────────────────────────────
 
 function createBin(width, height, kerf, binType, heuristic, splitRule) {
   if (binType === 'maxrects') {
@@ -91,7 +91,7 @@ function createBin(width, height, kerf, binType, heuristic, splitRule) {
   return new GuillotineBin(width, height, kerf, heuristic, splitRule);
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Core packing pass Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Core packing pass ──────────────────────────────────────────────────────
 
 function runSinglePass(expandedPieces, stock, options, binType, heuristic, splitRule, sortOrder, useStrips, availableOffcuts, presorted = false) {
   const {
@@ -296,7 +296,141 @@ function placeSingle(piece, boards, stock, options, binType, heuristic, splitRul
   unfitted.push(piece);
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Main entry point Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// \u2500\u2500 Shared utilities (used by optimizeCuts and optimizeDeep) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+/** Mulberry32 \u2014 fast, high-quality seeded PRNG. Same seed \u2192 same sequence. */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Score a raw packing result (lower = better). */
+function _scoreRaw(result) {
+  return {
+    boards: result.boardCount + result.unfitted.length * 100,
+    waste:  100 - result.utilization,
+  };
+}
+
+/** Returns true if candidate score beats the current best. */
+function _isBetter(score, best) {
+  return score.boards < best.boards ||
+    (score.boards === best.boards && score.waste < best.waste);
+}
+
+/**
+ * Reconstruct free rectangles from placed pieces using guillotine subtraction.
+ * Fallback for any packer that doesn't maintain freeRects (e.g. StripPack).
+ */
+function computeFreeRectsFromPlacements(stockW, stockH, placedPieces, kerfMm, edgeTrimMm) {
+  let free = [{ x: 0, y: 0, width: stockW, height: stockH }];
+  for (const p of placedPieces) {
+    const px = Math.max(0, p.x - edgeTrimMm);
+    const py = Math.max(0, p.y - edgeTrimMm);
+    const pw = p.placedWidth  + kerfMm;
+    const ph = p.placedHeight + kerfMm;
+    const nextFree = [];
+    for (const r of free) {
+      const noOverlap = px >= r.x + r.width || px + pw <= r.x || py >= r.y + r.height || py + ph <= r.y;
+      if (noOverlap) { nextFree.push(r); continue; }
+      if (px > r.x)             nextFree.push({ x: r.x,   y: r.y,   width: px - r.x,                                                  height: r.height });
+      if (px+pw < r.x+r.width)  nextFree.push({ x: px+pw, y: r.y,   width: (r.x+r.width)-(px+pw),                                    height: r.height });
+      if (py > r.y)             nextFree.push({ x: Math.max(r.x,px), y: r.y,   width: Math.min(r.x+r.width,px+pw)-Math.max(r.x,px), height: py-r.y });
+      if (py+ph < r.y+r.height) nextFree.push({ x: Math.max(r.x,px), y: py+ph, width: Math.min(r.x+r.width,px+pw)-Math.max(r.x,px), height: (r.y+r.height)-(py+ph) });
+    }
+    free = nextFree.filter(r => r.width > 0 && r.height > 0);
+  }
+  return free;
+}
+
+/**
+ * Wrap a StripPack result into the standard raw-result format
+ * expected by buildFinalOutput.
+ */
+function _wrapStripResult(stripResult, stock, boardGrain) {
+  const placedArea = stripResult.boards.reduce((s,b) => s + b.pieces.reduce((a,p) => a + p.placedWidth * p.placedHeight, 0), 0);
+  const stockArea  = stripResult.boards.reduce((s,b) => s + b.stockWidth * b.stockHeight, 0);
+  const util = stockArea > 0 ? (placedArea / stockArea) * 100 : 0;
+  return {
+    boards: stripResult.boards.map(b => ({
+      bin: { freeRects: [], getUtilization: () => util, getWasteArea: () => stockArea - placedArea },
+      stockWidth: b.stockWidth, stockHeight: b.stockHeight,
+      boardGrain: b.boardGrain || boardGrain, pieces: b.pieces,
+    })),
+    unfitted: stripResult.unfitted,
+    consumedOffcutIds: [],
+    boardCount: stripResult.boards.length,
+    utilization: util,
+    totalStockArea: stockArea,
+  };
+}
+
+/**
+ * Convert a raw packing result into the final CutWood output.
+ * Single source of truth used by both optimizeCuts and optimizeDeep.
+ */
+function buildFinalOutput(pieces, rawResult, options) {
+  const { kerf = 3, edgeTrim = 0 } = options;
+  const MIN_OFFCUT_FOR_CUTS = 0;
+  const MIN_OFFCUT_DISPLAY  = 100;
+  const allBoards = rawResult.boards;
+
+  const boardResults = allBoards.map((board, idx) => {
+    const rawFreeRects = (board.bin.freeRects && board.bin.freeRects.length > 0)
+      ? board.bin.freeRects
+      : computeFreeRectsFromPlacements(board.stockWidth, board.stockHeight, board.pieces, kerf, edgeTrim);
+
+    const allOffcutsForCuts = rawFreeRects
+      .filter(r => r.width >= MIN_OFFCUT_FOR_CUTS && r.height >= MIN_OFFCUT_FOR_CUTS)
+      .map(r => ({ width: Math.round(r.width), height: Math.round(r.height), x: Math.round(r.x), y: Math.round(r.y) }));
+
+    const displayOffcuts = allOffcutsForCuts
+      .filter(r => r.width >= MIN_OFFCUT_DISPLAY && r.height >= MIN_OFFCUT_DISPLAY);
+
+    return {
+      boardIndex:   idx,
+      stockWidth:   board.stockWidth,
+      stockHeight:  board.stockHeight,
+      isOffcut:     board.isOffcut    || false,
+      offcutSource: board.offcutSource || null,
+      pieces:       board.pieces,
+      cutSequence:  generateHierarchicalCutSequence(board, kerf, edgeTrim, allOffcutsForCuts),
+      utilization:  board.bin.getUtilization(),
+      wasteArea:    board.bin.getWasteArea(),
+      offcuts:      displayOffcuts,
+    };
+  });
+
+  const expandedTotal = pieces.reduce((sum, p) => sum + (p.quantity || 1), 0);
+  const placedCount   = expandedTotal - rawResult.unfitted.length;
+  const totalStock    = allBoards.reduce((s, b) => s + b.stockWidth * b.stockHeight, 0);
+  const totalUsed     = boardResults.reduce((s, b) => s + b.pieces.reduce((a, p) => a + p.placedWidth * p.placedHeight, 0), 0);
+
+  return {
+    boards:            boardResults,
+    unfitted:          rawResult.unfitted,
+    consumedOffcutIds: rawResult.consumedOffcutIds,
+    stats: {
+      totalBoards:        allBoards.filter(b => !b.isOffcut).length,
+      totalOffcutBoards:  allBoards.filter(b =>  b.isOffcut).length,
+      totalPieces:        expandedTotal,
+      placedPieces:       placedCount,
+      unfittedPieces:     rawResult.unfitted.length,
+      totalStockArea:     totalStock,
+      totalUsedArea:      totalUsed,
+      totalWasteArea:     totalStock - totalUsed,
+      overallUtilization: totalStock > 0
+        ? ((totalUsed / totalStock) * 100).toFixed(1)
+        : 0,
+    },
+  };
+}
+
+// ── Main entry point ──────────────────────────────────────────────────────────
 
 export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = []) {
   const MIN_OFFCUT_FOR_CUTS = 0;    // Cut sequence sees ALL waste areas (even small ones)
@@ -510,118 +644,126 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
     }
   }
 
-  // ── computeFreeRectsFromPlacements ──────────────────────────────────────────
-  // Fallback for packers that don't maintain freeRects (e.g. StripPack).
-  // Given the placed pieces, reconstructs the remaining free rectangles using
-  // guillotine-style subtraction, so retazos and cut sequences always work.
-  function computeFreeRectsFromPlacements(stockW, stockH, placedPieces, kerfMm, edgeTrimMm) {
-    // Work in internal coords (no edgeTrim offset — pieces already have it baked in)
-    let free = [{ x: 0, y: 0, width: stockW, height: stockH }];
+  return buildFinalOutput(pieces, bestResult, options);
+}
 
-    for (const p of placedPieces) {
-      // Piece footprint (including kerf margin on all sides for splitting)
-      const px = Math.max(0, p.x - edgeTrimMm);
-      const py = Math.max(0, p.y - edgeTrimMm);
-      const pw = p.placedWidth  + kerfMm;
-      const ph = p.placedHeight + kerfMm;
+// ── Deep Optimization ─────────────────────────────────────────────────────
+//
+// Extends the fast optimizer with:
+//   Phase 1 (0-25%)  : Same 126 standard variants + StripPack
+//   Phase 2 (25-55%) : Extended anchor-piece search (all combos, no early exit)
+//   Phase 3 (55-90%) : Seeded deep random shuffles (up to 5 000 iterations)
+//   Phase 4 (90-100%): Build final output
+//
+// Calls onProgress(percent 0-100, phaseLabel) at each checkpoint.
+// Runs inside a Web Worker — does NOT block the UI thread.
+// ---------------------------------------------------------------------------
 
-      const nextFree = [];
-      for (const r of free) {
-        // If no overlap, keep rect as-is
-        const noOverlap =
-          px >= r.x + r.width  ||
-          px + pw <= r.x       ||
-          py >= r.y + r.height ||
-          py + ph <= r.y;
-        if (noOverlap) { nextFree.push(r); continue; }
+export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [], { onProgress } = {}) {
+  const emit = (pct, msg) => onProgress?.(pct, msg);
+  const boardGrain = stock.grain || 'none';
+  const expanded   = expandPieces(pieces, boardGrain);
 
-        // Guillotine split: up to 4 sub-rects around the piece
-        // Left slice
-        if (px > r.x)
-          nextFree.push({ x: r.x, y: r.y, width: px - r.x, height: r.height });
-        // Right slice
-        if (px + pw < r.x + r.width)
-          nextFree.push({ x: px + pw, y: r.y, width: (r.x + r.width) - (px + pw), height: r.height });
-        // Top slice (between left/right columns)
-        if (py > r.y)
-          nextFree.push({ x: Math.max(r.x, px), y: r.y, width: Math.min(r.x + r.width, px + pw) - Math.max(r.x, px), height: py - r.y });
-        // Bottom slice (between left/right columns)
-        if (py + ph < r.y + r.height)
-          nextFree.push({ x: Math.max(r.x, px), y: py + ph, width: Math.min(r.x + r.width, px + pw) - Math.max(r.x, px), height: (r.y + r.height) - (py + ph) });
+  // Seeded RNG — same input always yields same deep-search path
+  const seed = pieces.reduce((h, p) => (h * 31 + p.width * 1000 + p.height * 7 + p.quantity) | 0, 127);
+  const rng  = mulberry32(seed);
+
+  let bestResult = null;
+  let bestScore  = { boards: Infinity, waste: Infinity };
+
+  const tryResult = (result) => {
+    if (!result) return;
+    const s = _scoreRaw(result);
+    if (_isBetter(s, bestScore)) { bestScore = s; bestResult = result; }
+  };
+
+  // ── Phase 1: 126 standard variants + StripPack (0-25%) ────────────────
+  emit(3, 'Iniciando análisis...');
+
+  // StripPack
+  const stripRes = runStripPack(expanded.map(p => ({...p})), stock, options);
+  if (stripRes.boards.length > 0) tryResult(_wrapStripResult(stripRes, stock, boardGrain));
+
+  // All 126 heuristic configs
+  const configs = [];
+  for (const heuristic of ['bssf', 'baf', 'blf'])
+    for (const splitRule of ['sla', 'lla'])
+      for (const sortOrder of SORT_ORDERS) {
+        configs.push({ binType: 'guillotine', heuristic, splitRule, sortOrder, useStrips: true  });
+        configs.push({ binType: 'guillotine', heuristic, splitRule, sortOrder, useStrips: false });
       }
-      free = nextFree.filter(r => r.width > 0 && r.height > 0);
+  for (const heuristic of ['bssf', 'baf', 'blf'])
+    for (const sortOrder of SORT_ORDERS) {
+      configs.push({ binType: 'maxrects', heuristic, splitRule: 'sla', sortOrder, useStrips: true  });
+      configs.push({ binType: 'maxrects', heuristic, splitRule: 'sla', sortOrder, useStrips: false });
     }
 
-    return free;
+  for (let i = 0; i < configs.length; i++) {
+    const c = configs[i];
+    tryResult(runSinglePass(expanded.map(p=>({...p})), stock, options, c.binType, c.heuristic, c.splitRule, c.sortOrder, c.useStrips, availableOffcuts));
+    if (i % 30 === 0) emit(3 + Math.round(i / configs.length * 22), `Evaluando variante ${i+1}/${configs.length}...`);
   }
 
-  // Step 3: Build final results
-  const allBoards = bestResult.boards;
-  const { kerf = 3, edgeTrim = 0 } = options;
+  emit(25, `Fase 1 ✓  ${bestScore.boards} tablero(s) · ${(100 - bestScore.waste).toFixed(1)}% aprovechamiento`);
+  if (bestScore.boards <= 1) { emit(95, 'Solución óptima encontrada · Construyendo resultado...'); return buildFinalOutput(pieces, bestResult, options); }
 
-  const boardResults = allBoards.map((board, idx) => {
-    // Get freeRects from the bin — or recompute if the packer didn't maintain them
-    // (StripPack returns bin.freeRects = [] — we fix this here permanently)
-    const rawFreeRects = (board.bin.freeRects && board.bin.freeRects.length > 0)
-      ? board.bin.freeRects
-      : computeFreeRectsFromPlacements(board.stockWidth, board.stockHeight, board.pieces, kerf, edgeTrim);
+  // ── Phase 2: Extended anchor search (25-55%) ──────────────────────────
+  emit(27, 'Búsqueda de anclas extendida...');
+  const seenAnchors = new Set();
+  const anchorSlots = Math.min(expanded.length, 20);
 
-    // All offcuts (down to 0mm) — used by cut sequence to see ALL waste boundaries
-    const allOffcutsForCuts = rawFreeRects
-      .filter(r => r.width >= MIN_OFFCUT_FOR_CUTS && r.height >= MIN_OFFCUT_FOR_CUTS)
-      .map(r => ({
-        width: Math.round(r.width),
-        height: Math.round(r.height),
-        x: Math.round(r.x),
-        y: Math.round(r.y),
-      }));
+  for (let a = 0; a < anchorSlots; a++) {
+    const key = `${expanded[a].width}_${expanded[a].height}`;
+    if (seenAnchors.has(key)) continue;
+    seenAnchors.add(key);
+    const rest = expanded.filter((_, i) => i !== a);
+    for (const so of SORT_ORDERS) {
+      const sorted   = [...rest].sort(getSortComparator(so)).map(p => ({...p}));
+      const reordered = [{ ...expanded[a] }, ...sorted];
+      for (const bt of ['maxrects', 'guillotine'])
+        for (const h of ['bssf', 'baf', 'blf']) {
+          const srs = bt === 'guillotine' ? ['sla', 'lla'] : ['sla'];
+          for (const sr of srs)
+            tryResult(runSinglePass(reordered.map(p=>({...p})), stock, options, bt, h, sr, 'area-desc', false, availableOffcuts, true));
+        }
+    }
+    emit(25 + Math.round((a + 1) / anchorSlots * 30), `Ancla ${a+1}/${anchorSlots} · Mejor: ${bestScore.boards} tablero(s)`);
+    if (bestScore.boards <= 1) break;
+  }
 
-    // Only show retazos >= 100mm as reusable in the UI
-    const displayOffcuts = allOffcutsForCuts.filter(
-      r => r.width >= MIN_OFFCUT_DISPLAY && r.height >= MIN_OFFCUT_DISPLAY
-    );
+  emit(55, `Fase 2 ✓  ${bestScore.boards} tablero(s) · ${(100 - bestScore.waste).toFixed(1)}% aprovechamiento`);
+  if (bestScore.boards <= 1) { emit(95, 'Solución óptima · Construyendo resultado...'); return buildFinalOutput(pieces, bestResult, options); }
 
-    return {
-      boardIndex: idx,
-      stockWidth: board.stockWidth,
-      stockHeight: board.stockHeight,
-      isOffcut: board.isOffcut || false,
-      offcutSource: board.offcutSource || null,
-      pieces: board.pieces,
-      cutSequence: generateHierarchicalCutSequence(board, kerf, edgeTrim, allOffcutsForCuts),
-      utilization: board.bin.getUtilization(),
-      wasteArea: board.bin.getWasteArea(),
-      offcuts: displayOffcuts,
-    };
-  });
+  // ── Phase 3: Deep random search (55-90%) ──────────────────────────────
+  // Scale iterations by piece complexity
+  const n = expanded.length;
+  const DEEP_N = n > 50 ? 500 : n > 30 ? 1500 : n > 20 ? 3000 : 5000;
+  emit(57, `Búsqueda profunda: ${DEEP_N} iteraciones...`);
 
+  for (let attempt = 0; attempt < DEEP_N; attempt++) {
+    // Fisher-Yates shuffle with seeded RNG
+    const shuffled = expanded.map(p => ({...p}));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    for (const bt of ['maxrects', 'guillotine'])
+      for (const h of ['bssf', 'baf'])
+        tryResult(runSinglePass(shuffled.map(p=>({...p})), stock, options, bt, h, 'sla', 'area-desc', false, availableOffcuts, true));
 
-  const expandedTotal = pieces.reduce((sum, p) => sum + (p.quantity || 1), 0);
-  const placedCount = expandedTotal - bestResult.unfitted.length;
-  const totalStockArea = allBoards.reduce((sum, b) => sum + b.stockWidth * b.stockHeight, 0);
-  const totalUsedArea = boardResults.reduce(
-    (sum, b) => sum + b.pieces.reduce((s, p) => s + p.placedWidth * p.placedHeight, 0), 0
-  );
+    if (attempt % 150 === 0)
+      emit(57 + Math.round(attempt / DEEP_N * 33), `Iteración ${attempt}/${DEEP_N} · Mejor: ${bestScore.boards} tablero(s)`);
+    if (bestScore.boards <= 1) break;
+  }
 
-  return {
-    boards: boardResults,
-    unfitted: bestResult.unfitted,
-    consumedOffcutIds: bestResult.consumedOffcutIds,
-    stats: {
-      totalBoards: allBoards.filter(b => !b.isOffcut).length,
-      totalOffcutBoards: allBoards.filter(b => b.isOffcut).length,
-      totalPieces: expandedTotal,
-      placedPieces: placedCount,
-      unfittedPieces: bestResult.unfitted.length,
-      totalStockArea,
-      totalUsedArea,
-      totalWasteArea: totalStockArea - totalUsedArea,
-      overallUtilization: totalStockArea > 0
-        ? ((totalUsedArea / totalStockArea) * 100).toFixed(1)
-        : 0,
-    },
-  };
+  emit(90, `Fase 3 ✓  ${bestScore.boards} tablero(s) · ${(100 - bestScore.waste).toFixed(1)}% aprovechamiento`);
+
+  // ── Phase 4: Build result (90-100%) ───────────────────────────────────
+  emit(93, 'Construyendo resultado final...');
+  return buildFinalOutput(pieces, bestResult, options);
 }
+
+
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Piece expansion Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
