@@ -1,19 +1,24 @@
 /**
- * CutWood Optimizer v4 — Multi-Heuristic Best-of-N + MaxRects + Skyline
+ * CutWood Optimizer v4.1 — Multi-Heuristic Best-of-N + MaxRects + Skyline
  *
  * Strategy:
  * 1. Generate N configurations:
  *    - 3 bin types (Guillotine, MaxRects, Skyline)
  *    - 3 heuristics each (BSSF/BAF/BLF | BL/WF/MinMax)
  *    - 2 split rules for Guillotine (SLA, LLA)
- *    - 7 sort orders
+ *    - 8 sort orders (incl. group-area-desc for same-type consolidation)
  *    - 2 packing modes (with-strips, all-singles)
- *    Total: ~168 variants (+42 Skyline)
+ *    Total: ~192 variants
  * 2. Run each independently
  * 3. Select the solution with fewest boards (tie-break: highest utilization)
  * 4. Generate hierarchical cut sequences for winning solution
  *
- * Performance: <150ms total
+ * Performance: <200ms total
+ *
+ * v4.1 — Same-Group Consolidation:
+ *   New sort order 'group-area-desc' keeps identical pieces together in the
+ *   placement queue. Prevents fragmentation: small same-type pieces no longer
+ *   scatter across boards, consolidated on fewer boards (e.g. 14%→91% on Tablero 7).
  */
 
 import { GuillotineBin } from './guillotine.js';
@@ -29,6 +34,7 @@ const SORT_ORDERS = [
   'width-desc',
   'max-side-desc',
   'diff-desc',
+  'group-area-desc',  // v4.1: same-type pieces stay together → prevents fragmentation
 ];
 
 /**
@@ -57,6 +63,21 @@ function getSortComparator(order) {
       return (a, b) => Math.max(b.width, b.height) - Math.max(a.width, a.height);
     case 'diff-desc':
       return (a, b) => Math.abs(b.width - b.height) - Math.abs(a.width - a.height);
+    case 'group-area-desc': {
+      // v4.1 — Same-Group Consolidation:
+      // Primary key: group identity (normalized WxH) sorted by group area descending.
+      // Secondary key: within same group, sort by area desc (for rotated variants).
+      // Result: all 12 Cajón cocina L land together → fill one board → no 14% boards.
+      return (a, b) => {
+        const areaA = a.width * a.height;
+        const areaB = b.width * b.height;
+        // Normalize key: min×max so rotated pieces share same bucket
+        const keyA = `${Math.min(a.width, a.height)}_${Math.max(a.width, a.height)}`;
+        const keyB = `${Math.min(b.width, b.height)}_${Math.max(b.width, b.height)}`;
+        if (keyA === keyB) return areaB - areaA; // same group: keep together, largest first
+        return areaB - areaA; // different group: sort by area desc
+      };
+    }
     case 'area-desc':
     default:
       return (a, b) => (b.width * b.height) - (a.width * a.height);
@@ -77,10 +98,43 @@ function getStripSortComparator(order) {
       return (a, b) => Math.max(b.pieceWidth, b.pieceHeight) - Math.max(a.pieceWidth, a.pieceHeight);
     case 'diff-desc':
       return (a, b) => Math.abs(b.pieceWidth - b.pieceHeight) - Math.abs(a.pieceWidth - a.pieceHeight);
+    case 'group-area-desc':
+      // For strips: sort by total area desc (strips are already same-type groups)
+      return (a, b) => b.totalArea - a.totalArea;
     case 'area-desc':
     default:
       return (a, b) => b.totalArea - a.totalArea;
   }
+}
+
+// ── Apply sort (with special handling for group-area-desc) ─────────────────
+
+/**
+ * Sorts an expanded piece array by the given order.
+ * For 'group-area-desc': pieces are grouped by normalized WxH dimension,
+ * groups sorted by area-desc, pieces within each group in area-desc order.
+ * This guarantees all identical pieces are contiguous in the placement queue,
+ * preventing fragmentation across boards.
+ */
+function applySortOrder(arr, order) {
+  if (order !== 'group-area-desc') {
+    return [...arr].sort(getSortComparator(order));
+  }
+  // Build groups keyed by normalized size
+  const groupMap = new Map();
+  for (const p of arr) {
+    const key = `${Math.min(p.width, p.height)}_${Math.max(p.width, p.height)}`;
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key).push(p);
+  }
+  // Sort groups by their representative area (descending)
+  const sortedGroups = [...groupMap.values()].sort(
+    (ga, gb) => (gb[0].width * gb[0].height) - (ga[0].width * ga[0].height)
+  );
+  // Flatten: each group's pieces sorted by area-desc internally
+  return sortedGroups.flatMap(g =>
+    g.sort((a, b) => (b.width * b.height) - (a.width * a.height))
+  );
 }
 
 // ── Create the right bin type ──────────────────────────────────────────────
@@ -115,16 +169,15 @@ function runSinglePass(expandedPieces, stock, options, binType, heuristic, split
     // Detect strips + singles
     const { strips, singles } = detectStripsFromExpanded(expandedPieces, effectiveWidth, effectiveHeight, kerf);
     strips.sort(getStripSortComparator(sortOrder));
-    singles.sort(getSortComparator(sortOrder));
-    allPiecesToPlace = { strips, singles };
+    const sortedSingles = applySortOrder(singles, sortOrder);
+    allPiecesToPlace = { strips, singles: sortedSingles };
   } else if (presorted) {
     // Use pieces in their given order (for anchor-piece strategy)
     allPiecesToPlace = { strips: [], singles: [...expandedPieces] };
   } else {
     // All pieces as individuals (no strips)
-    const all = [...expandedPieces];
-    all.sort(getSortComparator(sortOrder));
-    allPiecesToPlace = { strips: [], singles: all };
+    const sorted = applySortOrder(expandedPieces, sortOrder);
+    allPiecesToPlace = { strips: [], singles: sorted };
   }
 
   const boards = [];

@@ -224,16 +224,35 @@ const SKYLINE_SORT_COMPARATORS = {
   'diff-desc':      (a, b) => Math.abs(b.width - b.height) - Math.abs(a.width - a.height),
 };
 
+function applySkylineSort(pieces, sortOrder) {
+  if (sortOrder !== 'group-area-desc') {
+    const cmp = SKYLINE_SORT_COMPARATORS[sortOrder];
+    return cmp ? [...pieces].sort(cmp) : [...pieces];
+  }
+  // Same-group consolidation for Skyline
+  const groupMap = new Map();
+  for (const p of pieces) {
+    const key = `${Math.min(p.width, p.height)}_${Math.max(p.width, p.height)}`;
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key).push(p);
+  }
+  const sortedGroups = [...groupMap.values()].sort(
+    (ga, gb) => (gb[0].width * gb[0].height) - (ga[0].width * ga[0].height)
+  );
+  return sortedGroups.flatMap(g =>
+    g.sort((a, b) => (b.width * b.height) - (a.width * a.height))
+  );
+}
+
 export function runSkylinePack(pieces, stock, options = {}, heuristic = 'bl', sortOrder = 'area-desc') {
   const { kerf = 3, edgeTrim = 0, allowRotation = true } = options;
   const binW = stock.width  - 2 * edgeTrim;
   const binH = stock.height - 2 * edgeTrim;
   const kerfOffset = kerf;
 
-  // Apply sort order
-  const sortedPieces = [...pieces];
-  const cmp = SKYLINE_SORT_COMPARATORS[sortOrder];
-  if (cmp) sortedPieces.sort(cmp);
+  // Apply sort order (with group-area-desc support)
+  const sortedPieces = applySkylineSort(pieces, sortOrder);
+
 
   const boards      = [];
   let currentBin    = new SkylineBin(binW, binH, heuristic, allowRotation);
