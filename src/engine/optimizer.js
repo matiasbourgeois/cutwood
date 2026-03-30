@@ -1,24 +1,25 @@
 /**
- * CutWood Optimizer v3 Ã¢â‚¬â€ Multi-Heuristic Best-of-N + MaxRects
+ * CutWood Optimizer v4 — Multi-Heuristic Best-of-N + MaxRects + Skyline
  *
  * Strategy:
  * 1. Generate N configurations:
- *    - 2 bin types (Guillotine, MaxRects)
- *    - 3 heuristics (BSSF, BAF, BLF)
+ *    - 3 bin types (Guillotine, MaxRects, Skyline)
+ *    - 3 heuristics each (BSSF/BAF/BLF | BL/WF/MinMax)
  *    - 2 split rules for Guillotine (SLA, LLA)
  *    - 7 sort orders
  *    - 2 packing modes (with-strips, all-singles)
- *    Total: ~126 variants
+ *    Total: ~168 variants (+42 Skyline)
  * 2. Run each independently
  * 3. Select the solution with fewest boards (tie-break: highest utilization)
  * 4. Generate hierarchical cut sequences for winning solution
  *
- * Performance: <100ms total
+ * Performance: <150ms total
  */
 
 import { GuillotineBin } from './guillotine.js';
 import { MaxRectsBin } from './maxrects.js';
 import { runStripPack } from './stripPacker.js';
+import { runSkylinePack } from './skyline.js';
 
 const SORT_ORDERS = [
   'area-desc',
@@ -40,7 +41,7 @@ function effectiveRotated(piece, binRotated) {
   return fr !== binRotated;
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Sort comparators Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Sort comparators ────────────────────────────────────────────────────────
 
 function getSortComparator(order) {
   switch (order) {
@@ -99,6 +100,10 @@ function runSinglePass(expandedPieces, stock, options, binType, heuristic, split
     allowRotation = true,
     edgeTrim = 0,
   } = options;
+
+  if (binType === 'skyline') {
+    return runSkylinePack(expandedPieces, stock, options, heuristic, sortOrder);
+  }
 
   const boardGrain = stock.grain || 'none';
   const effectiveWidth = stock.width - edgeTrim * 2;
@@ -296,9 +301,9 @@ function placeSingle(piece, boards, stock, options, binType, heuristic, splitRul
   unfitted.push(piece);
 }
 
-// \u2500\u2500 Shared utilities (used by optimizeCuts and optimizeDeep) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ── Shared utilities (used by optimizeCuts and optimizeDeep) ────────────────
 
-/** Mulberry32 \u2014 fast, high-quality seeded PRNG. Same seed \u2192 same sequence. */
+/** Mulberry32 — fast, high-quality seeded PRNG. Same seed → same sequence. */
 function mulberry32(seed) {
   return function () {
     seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
@@ -446,7 +451,7 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
 
   const configs = [];
 
-  // Guillotine variants: 3 heuristics Ãƒâ€” 2 splits Ãƒâ€” 7 sorts Ãƒâ€” 2 strip modes = 84
+  // Guillotine variants: 3 heuristics × 2 splits × 7 sorts × 2 strip modes = 84
   for (const heuristic of ['bssf', 'baf', 'blf']) {
     for (const splitRule of ['sla', 'lla']) {
       for (const sortOrder of SORT_ORDERS) {
@@ -456,11 +461,18 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
     }
   }
 
-  // MaxRects variants: 3 heuristics Ãƒâ€” 7 sorts Ãƒâ€” 2 strip modes = 42
+  // MaxRects variants: 3 heuristics × 7 sorts × 2 strip modes = 42
   for (const heuristic of ['bssf', 'baf', 'blf']) {
     for (const sortOrder of SORT_ORDERS) {
       configs.push({ binType: 'maxrects', heuristic, splitRule: 'sla', sortOrder, useStrips: true });
       configs.push({ binType: 'maxrects', heuristic, splitRule: 'sla', sortOrder, useStrips: false });
+    }
+  }
+
+  // Skyline variants: 3 heuristics × 7 sorts = 21 (single-pass, no strip needed)
+  for (const skyHeuristic of ['bl', 'wf', 'min-max']) {
+    for (const sortOrder of SORT_ORDERS) {
+      configs.push({ binType: 'skyline', heuristic: skyHeuristic, splitRule: 'sla', sortOrder, useStrips: false });
     }
   }
 
