@@ -1,5 +1,5 @@
 /**
- * CutWood Optimizer v4.1 — Multi-Heuristic Best-of-N + MaxRects + Skyline
+ * CutWood Optimizer v5.0 — Multi-Heuristic Best-of-N + MaxRects + Skyline + Lepton
  *
  * Strategy:
  * 1. Generate N configurations:
@@ -18,13 +18,23 @@
  * v4.1 — Same-Group Consolidation:
  *   New sort order 'group-area-desc' keeps identical pieces together in the
  *   placement queue. Prevents fragmentation: small same-type pieces no longer
- *   scatter across boards, consolidated on fewer boards (e.g. 14%→91% on Tablero 7).
+ *   scatter across boards, consolidated on fewer boards.
+ *
+ * v5.0 — Lepton-Style Min-Cuts Mode:
+ *   The 'min-cuts' optimization mode now uses the Lepton-style horizontal
+ *   strip packer (leptonPacker.js). This produces layouts with:
+ *   - Horizontal rows of same/similar-height pieces
+ *   - Sub-columns in the right residual of each row
+ *   - Minimum total cuts (horizontal first, then vertical)
+ *   - Better piece grouping (identical pieces in same row)
  */
 
 import { GuillotineBin } from './guillotine.js';
 import { MaxRectsBin } from './maxrects.js';
 import { runStripPack } from './stripPacker.js';
 import { runSkylinePack } from './skyline.js';
+import { runHorizontalStripPack } from './horizontalStripPacker.js';
+import { runLeptonPack } from './leptonPacker.js';
 
 const SORT_ORDERS = [
   'area-desc',
@@ -406,6 +416,104 @@ function computeFreeRectsFromPlacements(stockW, stockH, placedPieces, kerfMm, ed
 }
 
 /**
+ * Compute physically accurate retazos (offcuts) by simulating the cut sequence.
+ *
+ * Strategy: replay the cut tree hierarchically.
+ *   1. Start with one panel = full board.
+ *   2. For each cut (in sequence order), find the panel whose region matches
+ *      the cut's stored region, split it at cut.position, producing 2 sub-panels.
+ *   3. After all cuts, leaf panels containing no pieces → retazos.
+ *
+ * This is superior to guillotine-subtraction because:
+ *   - No fragmentation (each retazo is a single rectangle)
+ *   - No overlaps between retazos
+ *   - Retazos correspond exactly to what physically comes out of the saw
+ *
+ * @param {number} stockW
+ * @param {number} stockH
+ * @param {Array}  pieces      - placed pieces with x,y,placedWidth,placedHeight
+ * @param {Array}  cutSequence - from generateHierarchicalCutSequence
+ * @param {number} kerf
+ * @param {number} minSize     - both dimensions must be >= this to be kept
+ */
+function computeRetazosFromCutSequence(stockW, stockH, pieces, cutSequence, kerf, minSize) {
+  // Guard: no cuts → whole board, no retazos to speak of
+  if (!cutSequence || cutSequence.length === 0) return [];
+
+  // Working set of panels; each is { left, right, top, bottom }
+  let panels = [{ left: 0, right: stockW, top: 0, bottom: stockH }];
+
+  for (const cut of cutSequence) {
+    const cr  = cut.region; // the panel this cut was applied within
+    const pos = cut.position;
+    const type = cut.type;
+    const TOLERANCE = 2; // mm — allow small floating-point drift
+
+    // Find the smallest panel whose bounds contain the cut's region
+    let bestIdx  = -1;
+    let bestArea = Infinity;
+    for (let i = 0; i < panels.length; i++) {
+      const p = panels[i];
+      if (
+        p.left   <= cr.left   + TOLERANCE &&
+        p.right  >= cr.right  - TOLERANCE &&
+        p.top    <= cr.top    + TOLERANCE &&
+        p.bottom >= cr.bottom - TOLERANCE
+      ) {
+        const area = (p.right - p.left) * (p.bottom - p.top);
+        if (area < bestArea) { bestArea = area; bestIdx = i; }
+      }
+    }
+
+    if (bestIdx < 0) continue; // shouldn't happen, but be safe
+
+    const panel = panels[bestIdx];
+    panels.splice(bestIdx, 1);
+
+    if (type === 'horizontal') {
+      if (pos > panel.top && pos < panel.bottom) {
+        panels.push({ left: panel.left, right: panel.right, top: panel.top,    bottom: pos      });
+        if (pos + kerf < panel.bottom)
+          panels.push({ left: panel.left, right: panel.right, top: pos + kerf, bottom: panel.bottom });
+      } else {
+        panels.push(panel); // cut doesn't fall inside — restore
+      }
+    } else {
+      if (pos > panel.left && pos < panel.right) {
+        panels.push({ left: panel.left, right: pos,         top: panel.top, bottom: panel.bottom });
+        if (pos + kerf < panel.right)
+          panels.push({ left: pos + kerf, right: panel.right, top: panel.top, bottom: panel.bottom });
+      } else {
+        panels.push(panel);
+      }
+    }
+  }
+
+  // Identify leaf panels that contain no placed piece
+  const retazos = [];
+  for (const panel of panels) {
+    const w = Math.round(panel.right  - panel.left);
+    const h = Math.round(panel.bottom - panel.top);
+    if (w < minSize || h < minSize) continue;
+
+    const hasPiece = pieces.some(p => {
+      if (!p.placedWidth || !p.placedHeight) return false;
+      return p.x          < panel.right  &&
+             p.x + p.placedWidth  > panel.left  &&
+             p.y          < panel.bottom &&
+             p.y + p.placedHeight > panel.top;
+    });
+
+    if (!hasPiece) {
+      retazos.push({ x: Math.round(panel.left), y: Math.round(panel.top), width: w, height: h });
+    }
+  }
+
+  return retazos;
+}
+
+
+/**
  * Wrap a StripPack result into the standard raw-result format
  * expected by buildFinalOutput.
  */
@@ -428,6 +536,44 @@ function _wrapStripResult(stripResult, stock, boardGrain) {
 }
 
 /**
+ * Convert a transposed packing result (board dimensions swapped) back to real
+ * board coordinates. Swaps x↔y and placedWidth↔placedHeight on every piece,
+ * and restores stockWidth / stockHeight to the original (un-transposed) values.
+ *
+ * The 'rotated' flag is left as-is: because we pre-swap piece dims before the
+ * transposed run, the packer's own rot=false/true maps correctly to the real
+ * orientation without any additional inversion.
+ *
+ * @param {object} wrappedResult - output of _wrapStripResult on the transposed run
+ * @param {number} realStockW    - original stockWidth (before transposing)
+ * @param {number} realStockH    - original stockHeight (before transposing)
+ */
+function _untransposeResult(wrappedResult, realStockW, realStockH) {
+  if (!wrappedResult || !wrappedResult.boards) return null;
+  return {
+    ...wrappedResult,
+    boards: wrappedResult.boards.map(b => ({
+      ...b,
+      stockWidth:  realStockW,
+      stockHeight: realStockH,
+      pieces: b.pieces.map(p => ({
+        ...p,
+        // Restore original piece metadata stored before transposing
+        width:        p._origWidth  !== undefined ? p._origWidth  : p.placedHeight,
+        height:       p._origHeight !== undefined ? p._origHeight : p.placedWidth,
+        _origWidth:   undefined,
+        _origHeight:  undefined,
+        // Swap placed coordinates: transposed x→real y, transposed y→real x
+        x:            p.y,
+        y:            p.x,
+        placedWidth:  p.placedHeight,
+        placedHeight: p.placedWidth,
+      })),
+    })),
+  };
+}
+
+/**
  * Convert a raw packing result into the final CutWood output.
  * Single source of truth used by both optimizeCuts and optimizeDeep.
  */
@@ -438,16 +584,19 @@ function buildFinalOutput(pieces, rawResult, options) {
   const allBoards = rawResult.boards;
 
   const boardResults = allBoards.map((board, idx) => {
-    const rawFreeRects = (board.bin.freeRects && board.bin.freeRects.length > 0)
-      ? board.bin.freeRects
-      : computeFreeRectsFromPlacements(board.stockWidth, board.stockHeight, board.pieces, kerf, edgeTrim);
+    // ── 1. Generate the hierarchical cut sequence first ──────────────────────
+    // (offcuts [] = don't let free rects block cuts; we fixed this bug earlier)
+    const cutSequence = generateHierarchicalCutSequence(board, kerf, edgeTrim, []);
 
-    const allOffcutsForCuts = rawFreeRects
-      .filter(r => r.width >= MIN_OFFCUT_FOR_CUTS && r.height >= MIN_OFFCUT_FOR_CUTS)
-      .map(r => ({ width: Math.round(r.width), height: Math.round(r.height), x: Math.round(r.x), y: Math.round(r.y) }));
-
-    const displayOffcuts = allOffcutsForCuts
-      .filter(r => r.width >= MIN_OFFCUT_DISPLAY && r.height >= MIN_OFFCUT_DISPLAY);
+    // ── 2. Derive retazos by simulating the cut sequence ─────────────────────
+    // This replaces computeFreeRectsFromPlacements for display purposes.
+    // Each retazo corresponds to a leaf panel produced by the cut tree that
+    // contains no placed piece — i.e., physically comes out of the saw as waste.
+    const displayOffcuts = computeRetazosFromCutSequence(
+      board.stockWidth, board.stockHeight,
+      board.pieces, cutSequence, kerf,
+      MIN_OFFCUT_DISPLAY  // both dimensions must be >= 100 mm
+    );
 
     return {
       boardIndex:   idx,
@@ -456,7 +605,7 @@ function buildFinalOutput(pieces, rawResult, options) {
       isOffcut:     board.isOffcut    || false,
       offcutSource: board.offcutSource || null,
       pieces:       board.pieces,
-      cutSequence:  generateHierarchicalCutSequence(board, kerf, edgeTrim, allOffcutsForCuts),
+      cutSequence,
       utilization:  board.bin.getUtilization(),
       wasteArea:    board.bin.getWasteArea(),
       offcuts:      displayOffcuts,
@@ -494,9 +643,105 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
   const MIN_OFFCUT_FOR_CUTS = 0;    // Cut sequence sees ALL waste areas (even small ones)
   const MIN_OFFCUT_DISPLAY = 100;   // Only show retazos >= 100mm as reusable to the user
   const boardGrain = stock.grain || 'none';
+  const optimizationMode = options.optimizationMode || 'max-utilization';
 
   // Step 1: Expand pieces once
   const expanded = expandPieces(pieces, boardGrain);
+
+  // ── SHORT-CIRCUIT: Mínimos Cortes ──────────────────────────────────────────
+  // We try 4 variants and pick the best (fewest boards, then highest utilization):
+  //   A) Lepton packer  – normal orientation
+  //   B) HStrip packer  – normal orientation
+  //   C) Lepton packer  – board transposed 90° (pieces become vertical columns)
+  //   D) HStrip packer  – board transposed 90°
+  //
+  // The transposed variants replicate Lepton software's "vertical strip" strategy
+  // where tall pieces (e.g. 1900mm) are oriented as columns along the long board
+  // axis, leaving room for thin pieces (100/120mm) to pack at the base of each
+  // column — exactly what prevented CutWood from matching Lepton on mixed sets.
+  if (optimizationMode === 'min-cuts') {
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    const score = r => (r?.boardCount ?? 999) + (r?.unfitted?.length ?? 0) * 100;
+    // In min-cuts: on tie, prefer Lepton variants over HStrip.
+    // Lepton produces clean same-height rows → fewer unique saw settings → easier for operator.
+    const pickBetter = (a, b, aIsLepton = false, bIsLepton = false) => {
+      if (!a) return b;
+      if (!b) return a;
+      if (score(a) < score(b)) return a;
+      if (score(b) < score(a)) return b;
+      if (aIsLepton && !bIsLepton) return a;
+      if (bIsLepton && !aIsLepton) return b;
+      return (a.utilization || 0) >= (b.utilization || 0) ? a : b;
+    };
+
+    // ── Normal-orientation runs (A + B) ────────────────────────────────────────
+    let leptonWrapped = null;
+    try {
+      const r = runLeptonPack(expanded.map(p => ({ ...p })), stock, options);
+      leptonWrapped = _wrapStripResult(r, stock, boardGrain);
+    } catch (e) {
+      console.warn('[LeptonPacker] Error:', e.message);
+    }
+
+    const hResult  = runHorizontalStripPack(expanded.map(p => ({ ...p })), stock, options);
+    const hWrapped = _wrapStripResult(hResult, stock, boardGrain);
+
+    let bestNormal = pickBetter(leptonWrapped, hWrapped, true, false);
+
+    // ── Transposed-orientation runs (C + D) ────────────────────────────────────
+    // Only run if board is not square; skip for grain-constrained boards to avoid
+    // fibre-direction violations (grain support can be added later).
+    let bestTransposed = null;
+    let _bestTransposedIsLepton = false; // will be set inside if-block below
+    const isSquare    = stock.width === stock.height;
+    const hasGrain    = boardGrain && boardGrain !== 'none';
+
+    if (!isSquare && !hasGrain) {
+      // Pre-swap each piece's width↔height, preserving original dims for recovery.
+      // IMPORTANT: also set canRotate:false so the packer does NOT re-rotate the
+      // already-transposed piece. Without this, a piece like 1870×1590 gets
+      // swapped to 1590×1870, but the packer sees h(1870)>w(1590) and rotates it
+      // back to 1870×1590 → 1870 > stockW(1830) → UNFITTABLE. Bug fixed here.
+      const tPieces = expanded.map(p => ({
+        ...p,
+        _origWidth:  p.width,
+        _origHeight: p.height,
+        width:  p.canRotate !== false ? p.height : p.width,
+        height: p.canRotate !== false ? p.width  : p.height,
+        canRotate: false,  // piece is already in transposed orientation
+      }));
+      const tStock = { ...stock, width: stock.height, height: stock.width };
+
+      let leptonT = null; // declared here so we can reference it safely below
+      try {
+        const r = runLeptonPack(tPieces.map(p => ({ ...p })), tStock, options);
+        const w = _wrapStripResult(r, tStock, boardGrain);
+        leptonT = _untransposeResult(w, stock.width, stock.height);
+      } catch (e) {
+        console.warn('[LeptonPacker transposed] Error:', e.message);
+      }
+
+      let hT = null;
+      try {
+        const r = runHorizontalStripPack(tPieces.map(p => ({ ...p })), tStock, options);
+        const w = _wrapStripResult(r, tStock, boardGrain);
+        hT = _untransposeResult(w, stock.width, stock.height);
+      } catch (e) {
+        console.warn('[HStrip transposed] Error:', e.message);
+      }
+
+      const bestTransposedLocal = pickBetter(leptonT, hT, true, false);
+      bestTransposed = bestTransposedLocal;
+      // Track whether the best transposed is the Lepton variant (for outer pick)
+      _bestTransposedIsLepton = bestTransposedLocal === leptonT;
+    }
+
+    const best = pickBetter(bestNormal, bestTransposed,
+      /* bestNormal is Lepton? */ bestNormal === leptonWrapped,
+      /* bestTransposed is Lepton? */ _bestTransposedIsLepton);
+    return buildFinalOutput(pieces, best ?? hWrapped, options);
+  }
 
   // Step 2: Run ALL strategy combinations
   let bestResult = null;

@@ -168,24 +168,54 @@ export default function StockConfig({
 
             {/* TAB 2: CORTE */}
             {activeTab === 'corte' && (
-              <div className="stock-grid">
-                <div className="stock-field">
-                  <label>Kerf (sierra)</label>
-                  <div className="stock-input-wrap">
-                    <input type="number" min="0" step="0.5" value={options.kerf}
-                      onChange={(e) => updateOption('kerf', e.target.value)} />
-                    <span className="stock-unit">mm</span>
+              <>
+                <div className="stock-grid">
+                  <div className="stock-field">
+                    <label>Kerf (sierra)</label>
+                    <div className="stock-input-wrap">
+                      <input type="number" min="0" step="0.5" value={options.kerf}
+                        onChange={(e) => updateOption('kerf', e.target.value)} />
+                      <span className="stock-unit">mm</span>
+                    </div>
+                  </div>
+                  <div className="stock-field">
+                    <label>Margen borde</label>
+                    <div className="stock-input-wrap">
+                      <input type="number" min="0" value={options.edgeTrim}
+                        onChange={(e) => updateOption('edgeTrim', e.target.value)} />
+                      <span className="stock-unit">mm</span>
+                    </div>
                   </div>
                 </div>
-                <div className="stock-field">
-                  <label>Margen borde</label>
-                  <div className="stock-input-wrap">
-                    <input type="number" min="0" value={options.edgeTrim}
-                      onChange={(e) => updateOption('edgeTrim', e.target.value)} />
-                    <span className="stock-unit">mm</span>
-                  </div>
+
+                {/* Optimization mode toggle */}
+                <div className="material-divider">
+                  <span>Prioridad de optimización</span>
                 </div>
-              </div>
+                <div className="optmode-toggle-group">
+                  <button
+                    className={`optmode-btn${(options.optimizationMode || 'max-utilization') === 'max-utilization' ? ' optmode-btn--active' : ''}`}
+                    onClick={() => updateOption('optimizationMode', 'max-utilization')}
+                    title="Maximiza el aprovechamiento del tablero usando todos los algoritmos disponibles"
+                  >
+                    <span className="optmode-icon">📦</span>
+                    <span className="optmode-label">Máx. Aprovechamiento</span>
+                  </button>
+                  <button
+                    className={`optmode-btn optmode-btn--cuts${(options.optimizationMode || 'max-utilization') === 'min-cuts' ? ' optmode-btn--active' : ''}`}
+                    onClick={() => updateOption('optimizationMode', 'min-cuts')}
+                    title="Organiza piezas en franjas horizontales — menos cortes, secuencia más simple para el operario"
+                  >
+                    <span className="optmode-icon">✂️</span>
+                    <span className="optmode-label">Mínimos Cortes</span>
+                  </button>
+                </div>
+                {(options.optimizationMode || 'max-utilization') === 'min-cuts' && (
+                  <div className="optmode-hint">
+                    Las piezas se agrupan en franjas horizontales. Menos cortes, flujo de trabajo más simple para el operario.
+                  </div>
+                )}
+              </>
             )}
 
             {/* TAB 3: RETAZOS */}
