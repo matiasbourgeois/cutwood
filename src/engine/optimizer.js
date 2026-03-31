@@ -35,6 +35,7 @@ import { runStripPack } from './stripPacker.js';
 import { runSkylinePack } from './skyline.js';
 import { runHorizontalStripPack } from './horizontalStripPacker.js';
 import { runLeptonPack } from './leptonPacker.js';
+import { postProcessGapFill } from './gapFiller.js';
 
 const SORT_ORDERS = [
   'area-desc',
@@ -1143,10 +1144,16 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
 
 // ── Deep Optimization ─────────────────────────────────────────────────────
 //
-// Extends the fast optimizer with:
-//   Phase 1 (0-25%)  : Same 126 standard variants + StripPack
-//   Phase 2 (25-55%) : Extended anchor-piece search (all combos, no early exit)
-//   Phase 3 (55-90%) : Seeded deep random shuffles (up to 5 000 iterations)
+// For min-cuts mode:
+//   Phase 1 (0-30%)  : Fast min-cuts (HStrip + Lepton + 2P, all variants)
+//   Phase 2 (30-60%) : HStrip permutation search (seeded shuffles)
+//   Phase 3 (60-85%) : Gap-Fill Post-Processor + Board Merging
+//   Phase 4 (85-100%): Build final output
+//
+// For max-utilization mode:
+//   Phase 1 (0-25%)  : 126 standard variants + StripPack
+//   Phase 2 (25-55%) : Extended anchor-piece search
+//   Phase 3 (55-90%) : Seeded deep random shuffles (up to 5000 iterations)
 //   Phase 4 (90-100%): Build final output
 //
 // Calls onProgress(percent 0-100, phaseLabel) at each checkpoint.
@@ -1157,8 +1164,182 @@ export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [],
   const emit = (pct, msg) => onProgress?.(pct, msg);
   const boardGrain = stock.grain || 'none';
   const expanded   = expandPieces(pieces, boardGrain);
+  const optimizationMode = options.optimizationMode || 'min-cuts';
 
-  // Seeded RNG — same input always yields same deep-search path
+  // ── MIN-CUTS DEEP MODE ───────────────────────────────────────────────────
+  if (optimizationMode === 'min-cuts') {
+    return _deepMinCuts(pieces, stock, options, expanded, boardGrain, emit);
+  }
+
+  // ── MAX-UTILIZATION DEEP MODE (original) ─────────────────────────────────
+  return _deepMaxUtilization(pieces, stock, options, availableOffcuts, expanded, boardGrain, emit);
+}
+
+// ── Min-Cuts Deep Mode ────────────────────────────────────────────────────────
+function _deepMinCuts(pieces, stock, options, expanded, boardGrain, emit) {
+  const seed = pieces.reduce((h, p) => (h * 31 + p.width * 1000 + p.height * 7 + p.quantity) | 0, 127);
+  const rng = mulberry32(seed);
+  const MIN_THIN_DIM = 135;
+
+  const BOARD_COST = 1000;
+  const UNFIT_COST = 100000;
+  const HOMO_BONUS = 8;
+
+  const _countHomoRows = (result) => {
+    if (!result?.boards) return 0;
+    let homoRows = 0;
+    for (const b of result.boards) {
+      const rowMap = new Map();
+      for (const p of b.pieces) {
+        const rowKey = Math.round((p.y ?? 0) / 5) * 5;
+        if (!rowMap.has(rowKey)) rowMap.set(rowKey, new Set());
+        rowMap.get(rowKey).add(p.placedHeight);
+      }
+      for (const heights of rowMap.values()) if (heights.size === 1) homoRows++;
+    }
+    return homoRows;
+  };
+
+  const combinedScore = (r) => {
+    if (!r) return Infinity;
+    const boards = r.boardCount ?? r.boards?.length ?? 999;
+    const unfit = r.unfitted?.length ?? 0;
+    const homo = _countHomoRows(r);
+    return boards * BOARD_COST + unfit * UNFIT_COST - homo * HOMO_BONUS;
+  };
+
+  let best = null;
+  let bestCS = Infinity;
+
+  const tryCS = (r, name) => {
+    if (!r) return;
+    const s = combinedScore(r);
+    if (s < bestCS) { bestCS = s; best = r; best._algoName = name; }
+  };
+
+  // ── Phase 1: Run all fast min-cuts variants (0-30%) ────────────────────
+  emit(3, 'Fase 1: Variantes rápidas HStrip + Lepton...');
+
+  // Lepton normal
+  try {
+    const r = runLeptonPack(expanded.map(p => ({ ...p })), stock, options);
+    tryCS(_wrapStripResult(r, stock, boardGrain), 'LeptonPack');
+  } catch (e) { /* skip */ }
+
+  // HStrip normal
+  const hResult = runHorizontalStripPack(expanded.map(p => ({ ...p })), stock, options);
+  tryCS(_wrapStripResult(hResult, stock, boardGrain), 'HStrip');
+
+  // Two-Pass HStrip
+  try {
+    const largePieces = expanded.filter(p => Math.min(p.width, p.height) >= MIN_THIN_DIM).map(p => ({ ...p }));
+    const thinPieces  = expanded.filter(p => Math.min(p.width, p.height) <  MIN_THIN_DIM).map(p => ({ ...p }));
+    if (largePieces.length > 0 && thinPieces.length > 0) {
+      const r1 = runHorizontalStripPack(largePieces, stock, options);
+      const r2 = runHorizontalStripPack(thinPieces, stock, options);
+      const eT = options.edgeTrim || 0, k = options.kerf || 3, maxH = stock.height - eT * 2;
+      const mergedBoards = r1.boards.map(b => ({ ...b, pieces: [...b.pieces] }));
+      const lastBoard = mergedBoards[mergedBoards.length - 1];
+      let lastMaxY = lastBoard.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+      const overflow = [];
+      for (const tb of r2.boards) {
+        const thinMaxY = tb.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+        const thinH = thinMaxY - eT;
+        if (lastMaxY + k + thinH <= maxH + eT) {
+          const yShift = lastMaxY + k - eT;
+          for (const p of tb.pieces) lastBoard.pieces.push({ ...p, y: p.y + yShift });
+          lastMaxY += k + thinH;
+        } else overflow.push(tb);
+      }
+      mergedBoards.push(...overflow);
+      tryCS(_wrapStripResult({ boards: mergedBoards, unfitted: [...r1.unfitted, ...r2.unfitted] }, stock, boardGrain), 'HStrip-2P');
+    }
+  } catch (e) { /* skip */ }
+  emit(10, `Variantes normales: ${best?.boards?.length ?? '?'} tableros`);
+
+  // Transposed variants
+  const isSquare = stock.width === stock.height;
+  const hasGrain = boardGrain && boardGrain !== 'none';
+  if (!isSquare && !hasGrain) {
+    const tPieces = expanded.map(p => ({ ...p, _origW: p.width, _origH: p.height, width: p.canRotate !== false ? p.height : p.width, height: p.canRotate !== false ? p.width : p.height, canRotate: false }));
+    const tStock = { ...stock, width: stock.height, height: stock.width };
+    try { const r = runLeptonPack(tPieces.map(p=>({...p})), tStock, options); const w = _wrapStripResult(r, tStock, boardGrain); tryCS(_untransposeResult(w, stock.width, stock.height), 'LeptonPack (T)'); } catch (e) { /* skip */ }
+    try { const r = runHorizontalStripPack(tPieces.map(p=>({...p})), tStock, options); const w = _wrapStripResult(r, tStock, boardGrain); tryCS(_untransposeResult(w, stock.width, stock.height), 'HStrip (T)'); } catch (e) { /* skip */ }
+    // 2P transposed
+    try {
+      const tLarge = tPieces.filter(p => Math.min(p.width, p.height) >= MIN_THIN_DIM).map(p=>({...p}));
+      const tThin = tPieces.filter(p => Math.min(p.width, p.height) < MIN_THIN_DIM).map(p=>({...p}));
+      if (tLarge.length > 0 && tThin.length > 0) {
+        const r1 = runHorizontalStripPack(tLarge, tStock, options);
+        const r2 = runHorizontalStripPack(tThin, tStock, options);
+        const eT = options.edgeTrim || 0, k = options.kerf || 3, maxH = tStock.height - eT * 2;
+        const mb = r1.boards.map(b=>({...b,pieces:[...b.pieces]}));
+        const lb = mb[mb.length-1]; let lmy = lb.pieces.reduce((m,p)=>Math.max(m,p.y+p.placedHeight),eT);
+        const ov = [];
+        for (const tb of r2.boards) { const ty = tb.pieces.reduce((m,p)=>Math.max(m,p.y+p.placedHeight),eT); const th=ty-eT; if(lmy+k+th<=maxH+eT){const ys=lmy+k-eT;for(const p of tb.pieces)lb.pieces.push({...p,y:p.y+ys});lmy+=k+th;}else ov.push(tb); }
+        mb.push(...ov);
+        const w = _wrapStripResult({boards:mb,unfitted:[...r1.unfitted,...r2.unfitted]}, tStock, boardGrain);
+        tryCS(_untransposeResult(w, stock.width, stock.height), 'HStrip-2P (T)');
+      }
+    } catch (e) { /* skip */ }
+  }
+  emit(25, `Fase 1 ✓ Mejor: ${best?.boards?.length ?? '?'} tableros (${best?._algoName || '?'})`);
+
+  // ── Phase 2: HStrip permutation search (30-60%) ─────────────────────────
+  const n = expanded.length;
+  const PERM_N = n > 50 ? 200 : n > 30 ? 500 : n > 20 ? 1000 : 2000;
+  emit(30, `Fase 2: ${PERM_N} permutaciones HStrip...`);
+
+  for (let attempt = 0; attempt < PERM_N; attempt++) {
+    const shuffled = expanded.map(p => ({ ...p }));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    // Try HStrip with shuffled order
+    const r = runHorizontalStripPack(shuffled, stock, options);
+    tryCS(_wrapStripResult(r, stock, boardGrain), 'HStrip-perm');
+
+    // Try Lepton with shuffled order
+    try {
+      const rl = runLeptonPack(shuffled.map(p=>({...p})), stock, options);
+      tryCS(_wrapStripResult(rl, stock, boardGrain), 'Lepton-perm');
+    } catch (e) { /* skip */ }
+
+    if (attempt % 100 === 0) {
+      emit(30 + Math.round(attempt / PERM_N * 30), `Permutación ${attempt}/${PERM_N} · Mejor: ${best?.boards?.length ?? '?'} tableros`);
+    }
+  }
+  emit(60, `Fase 2 ✓ Mejor: ${best?.boards?.length ?? '?'} tableros (${best?._algoName || '?'})`);
+
+  // ── Phase 3: Gap-Fill + Board Merge (60-85%) ─────────────────────────────
+  emit(62, 'Fase 3: Gap-Fill Post-Processor...');
+  if (best && best.boards && best.boards.length > 1) {
+    const gapFilled = postProcessGapFill(
+      { boards: best.boards, unfitted: best.unfitted || [] },
+      stock, options,
+      (pct, msg) => emit(62 + Math.round(pct / 100 * 23), msg)
+    );
+    // Only accept if it's better (fewer boards or same boards + better util)
+    if (gapFilled.boards.length < best.boards.length) {
+      // Re-wrap the result to get proper stats
+      const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
+      if (gapWrapped) {
+        gapWrapped._algoName = (best._algoName || 'HStrip') + '+GapFill';
+        best = gapWrapped;
+      }
+    }
+  }
+  emit(85, `Fase 3 ✓ Final: ${best?.boards?.length ?? '?'} tableros`);
+
+  // ── Phase 4: Build result (85-100%) ──────────────────────────────────────
+  emit(90, 'Construyendo resultado final...');
+  const algoName = best?._algoName ?? 'HStrip';
+  return buildFinalOutput(pieces, best, options, expanded, algoName);
+}
+
+// ── Max-Utilization Deep Mode (original) ──────────────────────────────────────
+function _deepMaxUtilization(pieces, stock, options, availableOffcuts, expanded, boardGrain, emit) {
   const seed = pieces.reduce((h, p) => (h * 31 + p.width * 1000 + p.height * 7 + p.quantity) | 0, 127);
   const rng  = mulberry32(seed);
 
@@ -1173,12 +1354,9 @@ export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [],
 
   // ── Phase 1: 126 standard variants + StripPack (0-25%) ────────────────
   emit(3, 'Iniciando análisis...');
-
-  // StripPack
   const stripRes = runStripPack(expanded.map(p => ({...p})), stock, options);
   if (stripRes.boards.length > 0) tryResult(_wrapStripResult(stripRes, stock, boardGrain));
 
-  // All 126 heuristic configs
   const configs = [];
   for (const heuristic of ['bssf', 'baf', 'blf'])
     for (const splitRule of ['sla', 'lla'])
@@ -1229,13 +1407,11 @@ export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [],
   if (bestScore.boards <= 1) { emit(95, 'Solución óptima · Construyendo resultado...'); return buildFinalOutput(pieces, bestResult, options, expanded); }
 
   // ── Phase 3: Deep random search (55-90%) ──────────────────────────────
-  // Scale iterations by piece complexity
   const n = expanded.length;
   const DEEP_N = n > 50 ? 500 : n > 30 ? 1500 : n > 20 ? 3000 : 5000;
   emit(57, `Búsqueda profunda: ${DEEP_N} iteraciones...`);
 
   for (let attempt = 0; attempt < DEEP_N; attempt++) {
-    // Fisher-Yates shuffle with seeded RNG
     const shuffled = expanded.map(p => ({...p}));
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
@@ -1251,8 +1427,6 @@ export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [],
   }
 
   emit(90, `Fase 3 ✓  ${bestScore.boards} tablero(s) · ${(100 - bestScore.waste).toFixed(1)}% aprovechamiento`);
-
-  // ── Phase 4: Build result (90-100%) ───────────────────────────────────
   emit(93, 'Construyendo resultado final...');
   return buildFinalOutput(pieces, bestResult, options);
 }
