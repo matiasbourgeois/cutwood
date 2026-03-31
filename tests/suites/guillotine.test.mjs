@@ -127,12 +127,11 @@ suite('Guillotine', () => {
     });
   }
 
-  test('T-GUILL-DS14: DS-14 pieza inaceptable → piezas OK colocadas', () => {
+  test('T-GUILL-DS14: DS-14 pieza inaceptable → 1 unfitted, piezas OK colocadas', () => {
     const r = optimizeCuts(DS14.pieces, DS14.stock, MU(DS14.options));
-    // El engine puede silenciosamente omitir la pieza 3000×400 sin ponerla en unfitted
-    // Lo importante es que las 2 piezas OK sí se colocan
+    // Bug corregido: la pieza 3000×400 ahora aparece en unfitted
+    expect(r.unfitted.length).toBe(1);
     const okPlaced = r.boards.flatMap(b => b.pieces).filter(p => p.id === 'ok');
     expect(okPlaced.length).toBe(2);
-    expect(typeof r.boards).toBe('object'); // no crash
   });
 });

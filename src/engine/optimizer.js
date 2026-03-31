@@ -577,8 +577,16 @@ function _untransposeResult(wrappedResult, realStockW, realStockH) {
  * Convert a raw packing result into the final CutWood output.
  * Single source of truth used by both optimizeCuts and optimizeDeep.
  */
-function buildFinalOutput(pieces, rawResult, options) {
+function buildFinalOutput(pieces, rawResult, options, expanded, algoName) {
   const { kerf = 3, edgeTrim = 0 } = options;
+  // Fallback: if expanded not provided, reconstruct from pieces
+  if (!expanded) {
+    expanded = [];
+    for (const piece of pieces) {
+      const qty = Math.max(0, piece.quantity ?? 1);
+      for (let i = 0; i < qty; i++) expanded.push({ id: piece.id, copyIndex: i });
+    }
+  }
   const MIN_OFFCUT_FOR_CUTS = 0;
   const MIN_OFFCUT_DISPLAY  = 100;
   const allBoards = rawResult.boards;
@@ -612,30 +620,56 @@ function buildFinalOutput(pieces, rawResult, options) {
     };
   });
 
-  const expandedTotal = pieces.reduce((sum, p) => sum + (p.quantity || 1), 0);
-  const placedCount   = expandedTotal - rawResult.unfitted.length;
+  // ── Safety reconciliation: catch silently dropped pieces ─────────────────
+  // Some packers may fail to insert oversized pieces without adding them to
+  // unfitted (e.g. skyline scoring selects a result where the piece simply
+  // was not attempted). We detect any expanded piece not in placed or unfitted
+  // and force-add it to unfitted so the user always knows about missing pieces.
+  const placedIds = new Set();
+  for (const b of boardResults) {
+    for (const p of b.pieces) {
+      placedIds.add(`${p.id}_${p.copyIndex ?? '?'}`);
+    }
+  }
+  const unfittedIds = new Set(
+    rawResult.unfitted.map(p => `${p.id}_${p.copyIndex ?? '?'}`)
+  );
+
+  const reconciledUnfitted = [...rawResult.unfitted];
+  for (const ep of expanded) {
+    const key = `${ep.id}_${ep.copyIndex ?? '?'}`;
+    if (!placedIds.has(key) && !unfittedIds.has(key)) {
+      // Piece was silently dropped — add to unfitted
+      reconciledUnfitted.push(ep);
+    }
+  }
+
+  const expandedTotal = expanded.length;
+  const placedCount   = placedIds.size;
   const totalStock    = allBoards.reduce((s, b) => s + b.stockWidth * b.stockHeight, 0);
   const totalUsed     = boardResults.reduce((s, b) => s + b.pieces.reduce((a, p) => a + p.placedWidth * p.placedHeight, 0), 0);
 
   return {
     boards:            boardResults,
-    unfitted:          rawResult.unfitted,
+    unfitted:          reconciledUnfitted,
     consumedOffcutIds: rawResult.consumedOffcutIds,
     stats: {
       totalBoards:        allBoards.filter(b => !b.isOffcut).length,
       totalOffcutBoards:  allBoards.filter(b =>  b.isOffcut).length,
       totalPieces:        expandedTotal,
       placedPieces:       placedCount,
-      unfittedPieces:     rawResult.unfitted.length,
+      unfittedPieces:     reconciledUnfitted.length,
       totalStockArea:     totalStock,
       totalUsedArea:      totalUsed,
       totalWasteArea:     totalStock - totalUsed,
       overallUtilization: totalStock > 0
         ? ((totalUsed / totalStock) * 100).toFixed(1)
         : 0,
+      algorithmUsed:      algoName ?? null,
     },
   };
 }
+
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
@@ -643,7 +677,7 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
   const MIN_OFFCUT_FOR_CUTS = 0;    // Cut sequence sees ALL waste areas (even small ones)
   const MIN_OFFCUT_DISPLAY = 100;   // Only show retazos >= 100mm as reusable to the user
   const boardGrain = stock.grain || 'none';
-  const optimizationMode = options.optimizationMode || 'max-utilization';
+  const optimizationMode = options.optimizationMode || 'min-cuts';
 
   // Step 1: Expand pieces once
   const expanded = expandPieces(pieces, boardGrain);
@@ -662,17 +696,30 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
   if (optimizationMode === 'min-cuts') {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
-    const score = r => (r?.boardCount ?? 999) + (r?.unfitted?.length ?? 0) * 100;
+    // Pick the better result for min-cuts mode:
+    //
+    // Combined score (lower = better):
+    //   boards × 1000
+    //   + unfitted × 100000      ← never sacrifice a piece for cut quality
+    //   - homoRows × 15          ← each homogeneous row saves ~1 cut step for operator
+    //
+    // Rationale: a result with 4 boards and 22 homogeneous rows scores
+    //   4×1000 = 4000, minus 22×15 = 330 → combined = 3670
+    // Against a result with 3 boards and 6 homogeneous rows:
+    //   3×1000 = 3000, minus 6×15 = 90 → combined = 2910
+    // The 3-board result wins. But if 3 boards has 0 homo rows:
+    //   3×1000 = 3000 → combined = 3000
+    // And 4 boards has 15 homo rows:
+    //   4×1000 - 15×15 = 3775 → still loses (boards dominate)
+    // This means we NEVER pay more than (1000/15) ≈ 66 homo rows for 1 extra board.
+    // In practice, lepton generates ~4-8 homo rows per board × 4 boards = 16-32.
+    // The trade is acceptable when lepton saves the operator 20+ fewer cuts.
+    const BOARD_COST = 1000;  // 1 extra board = always bad
+    const UNFIT_COST = 100000;
+    const HOMO_BONUS = 8;     // tie-break only — doesn't justify extra boards
 
-    /**
-     * Count homogeneous rows across all boards in a wrapped result.
-     * A row is "homogeneous" if all pieces at the same Y position share
-     * the same placedHeight — meaning a single horizontal guillotine cut
-     * is enough to separate them. More homo rows = fewer unique saw settings
-     * = easier, faster, less error-prone cutting for the operator.
-     *
-     * Y positions are snapped to a 5mm grid to absorb kerf rounding.
-     */
+
+
     const _countHomoRows = (result) => {
       if (!result?.boards) return 0;
       let homoRows = 0;
@@ -690,37 +737,99 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
       return homoRows;
     };
 
-    // Pick the better result for min-cuts mode:
-    //   1. Fewer total boards (primary — always)
-    //   2. Fewer unfitted pieces
-    //   3. MORE homogeneous rows (cut quality — the Lepton criterion)
-    //   4. Higher utilization (last resort)
+    const combinedScore = (r) => {
+      if (!r) return Infinity;
+      const boards  = r.boardCount ?? 999;
+      const unfit   = r.unfitted?.length ?? 0;
+      const homo    = _countHomoRows(r);
+      return boards * BOARD_COST + unfit * UNFIT_COST - homo * HOMO_BONUS;
+    };
+
     const pickBetter = (a, b) => {
       if (!a) return b;
       if (!b) return a;
-      if (score(a) < score(b)) return a;
-      if (score(b) < score(a)) return b;
-      // Same board count & unfitted → compare cut quality
-      const homoA = _countHomoRows(a);
-      const homoB = _countHomoRows(b);
-      if (homoA !== homoB) return homoA > homoB ? a : b;
-      // Last resort: utilization
+      const sa = combinedScore(a), sb = combinedScore(b);
+      if (sa !== sb) return sa < sb ? a : b;
+      // Exact tie: prefer Two-Pass (segregated layout) over mixed
+      const a2p = a._algoName?.includes('2P') ?? false;
+      const b2p = b._algoName?.includes('2P') ?? false;
+      if (a2p !== b2p) return a2p ? a : b;
+      // Still tied: prefer higher utilization
       return (a.utilization || 0) >= (b.utilization || 0) ? a : b;
     };
+
 
     // ── Normal-orientation runs (A + B) ────────────────────────────────────────
     let leptonWrapped = null;
     try {
       const r = runLeptonPack(expanded.map(p => ({ ...p })), stock, options);
       leptonWrapped = _wrapStripResult(r, stock, boardGrain);
+      if (leptonWrapped) leptonWrapped._algoName = 'LeptonPack';
     } catch (e) {
       console.warn('[LeptonPacker] Error:', e.message);
     }
 
     const hResult  = runHorizontalStripPack(expanded.map(p => ({ ...p })), stock, options);
     const hWrapped = _wrapStripResult(hResult, stock, boardGrain);
+    if (hWrapped) hWrapped._algoName = 'HStrip';
+
+    // ── Two-Pass HStrip (E): separate thin pieces, then backfill ────────────────
+    // Pass 1: pack only "large" pieces (min dimension >= 135mm)
+    // Pass 2: pack thin pieces, then BACKFILL them into the last large board's
+    //         remaining vertical space. Only overflow to new boards if needed.
+    // Result: Boards 1-2 have ZERO thin pieces; Board 3 has large pieces at
+    //         top + thin pieces at bottom. Same board count as single-pass.
+    const MIN_THIN_DIM = 135;
+    let h2pWrapped = null;
+    try {
+      const largePieces = expanded.filter(p => Math.min(p.width, p.height) >= MIN_THIN_DIM).map(p => ({ ...p }));
+      const thinPieces  = expanded.filter(p => Math.min(p.width, p.height) <  MIN_THIN_DIM).map(p => ({ ...p }));
+
+      if (largePieces.length > 0 && thinPieces.length > 0) {
+        const r1 = runHorizontalStripPack(largePieces, stock, options);
+        const r2 = runHorizontalStripPack(thinPieces,  stock, options);
+        const eT = options.edgeTrim || 0;
+        const k  = options.kerf || 3;
+        const maxH = stock.height - eT * 2;
+
+        // Deep-copy r1 boards so we can mutate
+        const mergedBoards = r1.boards.map(b => ({ ...b, pieces: [...b.pieces] }));
+        const lastBoard = mergedBoards[mergedBoards.length - 1];
+        let lastMaxY = lastBoard.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+
+        const overflowBoards = [];
+        for (const thinBoard of r2.boards) {
+          // Height used by this thin board (pieces start from edgeTrim)
+          const thinMaxY = thinBoard.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+          const thinH = thinMaxY - eT;
+
+          if (lastMaxY + k + thinH <= maxH + eT) {
+            // Fits! Shift all thin pieces below existing large pieces
+            const yShift = lastMaxY + k - eT;
+            for (const p of thinBoard.pieces) {
+              lastBoard.pieces.push({ ...p, y: p.y + yShift });
+            }
+            lastMaxY += k + thinH;
+          } else {
+            // Doesn't fit → keep as overflow board
+            overflowBoards.push(thinBoard);
+          }
+        }
+
+        mergedBoards.push(...overflowBoards);
+        const mergedResult = {
+          boards:   mergedBoards,
+          unfitted: [...r1.unfitted, ...r2.unfitted],
+        };
+        h2pWrapped = _wrapStripResult(mergedResult, stock, boardGrain);
+        if (h2pWrapped) h2pWrapped._algoName = 'HStrip-2P';
+      }
+    } catch (e) {
+      console.warn('[HStrip 2-Pass] Error:', e.message);
+    }
 
     let bestNormal = pickBetter(leptonWrapped, hWrapped);
+    bestNormal = pickBetter(bestNormal, h2pWrapped);
 
     // ── Transposed-orientation runs (C + D) ────────────────────────────────────
     // Only run if board is not square; skip for grain-constrained boards to avoid
@@ -750,6 +859,7 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
         const r = runLeptonPack(tPieces.map(p => ({ ...p })), tStock, options);
         const w = _wrapStripResult(r, tStock, boardGrain);
         leptonT = _untransposeResult(w, stock.width, stock.height);
+        if (leptonT) leptonT._algoName = 'LeptonPack (T)';
       } catch (e) {
         console.warn('[LeptonPacker transposed] Error:', e.message);
       }
@@ -759,16 +869,63 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
         const r = runHorizontalStripPack(tPieces.map(p => ({ ...p })), tStock, options);
         const w = _wrapStripResult(r, tStock, boardGrain);
         hT = _untransposeResult(w, stock.width, stock.height);
+        if (hT) hT._algoName = 'HStrip (T)';
       } catch (e) {
         console.warn('[HStrip transposed] Error:', e.message);
       }
 
+      // Two-Pass transposed (F) with backfill
+      let h2pT = null;
+      try {
+        const tLarge = tPieces.filter(p => Math.min(p.width, p.height) >= MIN_THIN_DIM).map(p => ({ ...p }));
+        const tThin  = tPieces.filter(p => Math.min(p.width, p.height) <  MIN_THIN_DIM).map(p => ({ ...p }));
+        if (tLarge.length > 0 && tThin.length > 0) {
+          const r1 = runHorizontalStripPack(tLarge, tStock, options);
+          const r2 = runHorizontalStripPack(tThin,  tStock, options);
+          const eT = options.edgeTrim || 0;
+          const k  = options.kerf || 3;
+          const maxH = tStock.height - eT * 2;
+
+          const mergedBoards = r1.boards.map(b => ({ ...b, pieces: [...b.pieces] }));
+          const lastBoard = mergedBoards[mergedBoards.length - 1];
+          let lastMaxY = lastBoard.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+
+          const overflowBoards = [];
+          for (const thinBoard of r2.boards) {
+            const thinMaxY = thinBoard.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+            const thinH = thinMaxY - eT;
+            if (lastMaxY + k + thinH <= maxH + eT) {
+              const yShift = lastMaxY + k - eT;
+              for (const p of thinBoard.pieces) {
+                lastBoard.pieces.push({ ...p, y: p.y + yShift });
+              }
+              lastMaxY += k + thinH;
+            } else {
+              overflowBoards.push(thinBoard);
+            }
+          }
+
+          mergedBoards.push(...overflowBoards);
+          const merged = { boards: mergedBoards, unfitted: [...r1.unfitted, ...r2.unfitted] };
+          const w = _wrapStripResult(merged, tStock, boardGrain);
+          h2pT = _untransposeResult(w, stock.width, stock.height);
+          if (h2pT) h2pT._algoName = 'HStrip-2P (T)';
+        }
+      } catch (e) {
+        console.warn('[HStrip 2-Pass transposed] Error:', e.message);
+      }
+
       bestTransposed = pickBetter(leptonT, hT);
+      bestTransposed = pickBetter(bestTransposed, h2pT);
     }
 
+    // Pick the winner — straight comparison, no orientation bias
     const best = pickBetter(bestNormal, bestTransposed);
-    return buildFinalOutput(pieces, best ?? hWrapped, options);
+    const algoName = best?._algoName ?? 'HStrip';
+    return buildFinalOutput(pieces, best ?? hWrapped, options, expanded, algoName);
+
   }
+
 
   // Step 2: Run ALL strategy combinations
   let bestResult = null;
@@ -981,7 +1138,7 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
     }
   }
 
-  return buildFinalOutput(pieces, bestResult, options);
+  return buildFinalOutput(pieces, bestResult, options, expanded);
 }
 
 // ── Deep Optimization ─────────────────────────────────────────────────────
@@ -1069,7 +1226,7 @@ export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [],
   }
 
   emit(55, `Fase 2 ✓  ${bestScore.boards} tablero(s) · ${(100 - bestScore.waste).toFixed(1)}% aprovechamiento`);
-  if (bestScore.boards <= 1) { emit(95, 'Solución óptima · Construyendo resultado...'); return buildFinalOutput(pieces, bestResult, options); }
+  if (bestScore.boards <= 1) { emit(95, 'Solución óptima · Construyendo resultado...'); return buildFinalOutput(pieces, bestResult, options, expanded); }
 
   // ── Phase 3: Deep random search (55-90%) ──────────────────────────────
   // Scale iterations by piece complexity
@@ -1108,7 +1265,8 @@ function expandPieces(pieces, boardGrain) {
   const expanded = [];
 
   for (const piece of pieces) {
-    const qty = piece.quantity || 1;
+    const qty = Math.max(0, piece.quantity ?? 1); // Bug fix: qty=0 → 0 copies (was qty||1 → min 1)
+    if (qty === 0) continue; // skip entirely
     const pieceGrain = piece.grain || 'none';
     let canRotate = true;
     let actualWidth = piece.width;

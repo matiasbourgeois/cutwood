@@ -13,6 +13,7 @@ import './suites/maxrects.test.mjs';
 import './suites/skyline.test.mjs';
 import './suites/stripPackers.test.mjs';
 import './suites/optimizer_maxutil.test.mjs';
+import './suites/canvas_render.test.mjs';
 
 import { run } from './runner.mjs';
 

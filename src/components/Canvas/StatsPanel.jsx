@@ -50,33 +50,41 @@ export default function StatsPanel({ stats, currentBoard, pieces, stock }) {
     <div className="stats-panel-redesign">
       {/* Radial Progress Ring */}
       <div className="utilization-ring-container">
-        <svg className="utilization-ring" viewBox="0 0 100 100">
-          {/* Background track */}
-          <circle
-            cx="50" cy="50" r={radius}
-            fill="none"
-            stroke="var(--border-subtle)"
-            strokeWidth="6"
-          />
-          {/* Progress arc */}
-          <circle
-            cx="50" cy="50" r={radius}
-            fill="none"
-            stroke={ringColor}
-            strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            transform="rotate(-90 50 50)"
-            className="utilization-ring-progress"
-            style={{ filter: `drop-shadow(0 0 6px ${ringColor}60)` }}
-          />
-        </svg>
-        <div className="utilization-ring-value">
-          <span className="utilization-ring-number" style={{ color: ringColor }}>{Math.round(utilizationNum)}</span>
-          <span className="utilization-ring-percent" style={{ color: ringColor }}>%</span>
+        {/* Fixed-size wrapper so the absolute % always centers on the ring */}
+        <div className="utilization-ring-wrapper">
+          <svg className="utilization-ring" viewBox="0 0 100 100">
+            {/* Background track */}
+            <circle
+              cx="50" cy="50" r={radius}
+              fill="none"
+              stroke="var(--border-subtle)"
+              strokeWidth="6"
+            />
+            {/* Progress arc */}
+            <circle
+              cx="50" cy="50" r={radius}
+              fill="none"
+              stroke={ringColor}
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              transform="rotate(-90 50 50)"
+              className="utilization-ring-progress"
+              style={{ filter: `drop-shadow(0 0 6px ${ringColor}60)` }}
+            />
+          </svg>
+          <div className="utilization-ring-value">
+            <span className="utilization-ring-number" style={{ color: ringColor }}>{Math.round(utilizationNum)}</span>
+            <span className="utilization-ring-percent" style={{ color: ringColor }}>%</span>
+          </div>
         </div>
         <div className="utilization-ring-label">Aprovechamiento</div>
+        {stats.algorithmUsed && (
+          <div className="algo-badge" title="Algoritmo ganador">
+            {stats.algorithmUsed}
+          </div>
+        )}
       </div>
 
       {/* 3-column stat cards */}

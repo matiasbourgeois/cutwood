@@ -73,18 +73,19 @@ suite('Edge Cases', () => {
     expect(isNaN(r.stats?.overallUtilization) || true).toBeTrue(); // no crash
   });
 
-  // T-EDGE-06: qty=0 → el engine lo trata como qty=1 (comportamiento documentado)
-  test('T-EDGE-06: qty=0 → engine trata como 1 copia (sin crash)', () => {
+  // T-EDGE-06: qty=0 → ahora correctamente produce 0 copias (bug corregido)
+  test('T-EDGE-06: qty=0 → 0 copias (bug corregido)', () => {
     const pieces = [
       { id:'p1', name:'A', width:500, height:500, quantity: 0 },
       { id:'p2', name:'B', width:400, height:400, quantity: 2 },
     ];
     const r = optimizeCuts(pieces, STD_STOCK, STD_OPT);
-    // El engine trata qty=0 como qty=1 → produce 1 copia de p1 + 2 de p2 = 3 total
-    // Verificamos que no crashea y que p2 está correctamente colocado
-    expect(typeof r.boards).toBe('object');
+    // qty=0 ahora produce 0 copias correctamente
+    const totalPlaced = r.boards.flatMap(b => b.pieces).length + r.unfitted.length;
+    expect(totalPlaced).toBe(2); // solo las 2 copias de p2
     const p2Placed = r.boards.flatMap(b => b.pieces).filter(p => p.id === 'p2');
     expect(p2Placed.length).toBe(2);
+    expect(r.stats.totalPieces).toBe(2); // qty=0 excluida del total
     expect(r.unfitted.length).toBe(0);
   });
 

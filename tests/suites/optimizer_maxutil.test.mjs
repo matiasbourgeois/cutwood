@@ -50,13 +50,12 @@ suite('Optimizer max-utilization', () => {
     expect(r.unfitted.length).toBe(0);
   });
 
-  test('T-MAXUTIL-07: DS-14 pieza inaceptable → piezas OK colocadas', () => {
+  test('T-MAXUTIL-07: DS-14 pieza inaceptable → 1 unfitted, piezas OK colocadas', () => {
     const r = optimizeCuts(DS14.pieces, DS14.stock, MU(DS14.options));
-    // El engine dropea silenciosamente la pieza 3000×400 (no la pone en unfitted)
-    // Lo importante: las 2 piezas OK sí se colocan
+    // Bug corregido: la pieza 3000×400 ahora aparece en unfitted
+    expect(r.unfitted.length).toBe(1);
     const okPlaced = r.boards.flatMap(b => b.pieces).filter(p => p.id === 'ok');
     expect(okPlaced.length).toBe(2);
-    expect(typeof r.boards).toBe('object'); // no crash
   });
 
   test('T-MAXUTIL-08: DS-15 (40 piezas iguales) → 0 unfitted, ≤3 tableros', () => {

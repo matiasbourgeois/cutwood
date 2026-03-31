@@ -196,6 +196,7 @@ const DEFAULT_OPTIONS = {
   kerf: 3,
   edgeTrim: 5,
   allowRotation: true,
+  optimizationMode: 'min-cuts',
 };
 
 const EMPTY_PIECE = () => ({

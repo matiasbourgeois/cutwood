@@ -76,7 +76,6 @@ export function runHorizontalStripPack(expandedPieces, stock, options = {}) {
       let bestNew = null, bestNewWaste = Infinity;
       for (const s of shelves) {
         if (item.h > s.h) continue;
-        // Available residual width for a new sub-col
         const residualAvail = W - s.mainW - (s.subW > 0 ? kerf + s.subW : 0) - kerf;
         if (item.w <= residualAvail) {
           const waste = s.h - item.h;

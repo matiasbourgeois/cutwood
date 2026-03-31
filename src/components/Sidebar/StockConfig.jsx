@@ -194,27 +194,20 @@ export default function StockConfig({
                 </div>
                 <div className="optmode-toggle-group">
                   <button
-                    className={`optmode-btn${(options.optimizationMode || 'max-utilization') === 'max-utilization' ? ' optmode-btn--active' : ''}`}
+                    className={`optmode-btn${(options.optimizationMode || 'min-cuts') === 'max-utilization' ? ' optmode-btn--active' : ''}`}
                     onClick={() => updateOption('optimizationMode', 'max-utilization')}
                     title="Maximiza el aprovechamiento del tablero usando todos los algoritmos disponibles"
                   >
-                    <span className="optmode-icon">📦</span>
                     <span className="optmode-label">Máx. Aprovechamiento</span>
                   </button>
                   <button
-                    className={`optmode-btn optmode-btn--cuts${(options.optimizationMode || 'max-utilization') === 'min-cuts' ? ' optmode-btn--active' : ''}`}
+                    className={`optmode-btn optmode-btn--cuts${(options.optimizationMode || 'min-cuts') === 'min-cuts' ? ' optmode-btn--active' : ''}`}
                     onClick={() => updateOption('optimizationMode', 'min-cuts')}
                     title="Organiza piezas en franjas horizontales — menos cortes, secuencia más simple para el operario"
                   >
-                    <span className="optmode-icon">✂️</span>
                     <span className="optmode-label">Mínimos Cortes</span>
                   </button>
                 </div>
-                {(options.optimizationMode || 'max-utilization') === 'min-cuts' && (
-                  <div className="optmode-hint">
-                    Las piezas se agrupan en franjas horizontales. Menos cortes, flujo de trabajo más simple para el operario.
-                  </div>
-                )}
               </>
             )}
 
