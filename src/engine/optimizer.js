@@ -663,15 +663,48 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
 
     // ── Helpers ────────────────────────────────────────────────────────────────
     const score = r => (r?.boardCount ?? 999) + (r?.unfitted?.length ?? 0) * 100;
-    // In min-cuts: on tie, prefer Lepton variants over HStrip.
-    // Lepton produces clean same-height rows → fewer unique saw settings → easier for operator.
-    const pickBetter = (a, b, aIsLepton = false, bIsLepton = false) => {
+
+    /**
+     * Count homogeneous rows across all boards in a wrapped result.
+     * A row is "homogeneous" if all pieces at the same Y position share
+     * the same placedHeight — meaning a single horizontal guillotine cut
+     * is enough to separate them. More homo rows = fewer unique saw settings
+     * = easier, faster, less error-prone cutting for the operator.
+     *
+     * Y positions are snapped to a 5mm grid to absorb kerf rounding.
+     */
+    const _countHomoRows = (result) => {
+      if (!result?.boards) return 0;
+      let homoRows = 0;
+      for (const b of result.boards) {
+        const rowMap = new Map();
+        for (const p of b.pieces) {
+          const rowKey = Math.round((p.y ?? 0) / 5) * 5;
+          if (!rowMap.has(rowKey)) rowMap.set(rowKey, new Set());
+          rowMap.get(rowKey).add(p.placedHeight);
+        }
+        for (const heights of rowMap.values()) {
+          if (heights.size === 1) homoRows++;
+        }
+      }
+      return homoRows;
+    };
+
+    // Pick the better result for min-cuts mode:
+    //   1. Fewer total boards (primary — always)
+    //   2. Fewer unfitted pieces
+    //   3. MORE homogeneous rows (cut quality — the Lepton criterion)
+    //   4. Higher utilization (last resort)
+    const pickBetter = (a, b) => {
       if (!a) return b;
       if (!b) return a;
       if (score(a) < score(b)) return a;
       if (score(b) < score(a)) return b;
-      if (aIsLepton && !bIsLepton) return a;
-      if (bIsLepton && !aIsLepton) return b;
+      // Same board count & unfitted → compare cut quality
+      const homoA = _countHomoRows(a);
+      const homoB = _countHomoRows(b);
+      if (homoA !== homoB) return homoA > homoB ? a : b;
+      // Last resort: utilization
       return (a.utilization || 0) >= (b.utilization || 0) ? a : b;
     };
 
@@ -687,15 +720,14 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
     const hResult  = runHorizontalStripPack(expanded.map(p => ({ ...p })), stock, options);
     const hWrapped = _wrapStripResult(hResult, stock, boardGrain);
 
-    let bestNormal = pickBetter(leptonWrapped, hWrapped, true, false);
+    let bestNormal = pickBetter(leptonWrapped, hWrapped);
 
     // ── Transposed-orientation runs (C + D) ────────────────────────────────────
     // Only run if board is not square; skip for grain-constrained boards to avoid
     // fibre-direction violations (grain support can be added later).
     let bestTransposed = null;
-    let _bestTransposedIsLepton = false; // will be set inside if-block below
-    const isSquare    = stock.width === stock.height;
-    const hasGrain    = boardGrain && boardGrain !== 'none';
+    const isSquare = stock.width === stock.height;
+    const hasGrain = boardGrain && boardGrain !== 'none';
 
     if (!isSquare && !hasGrain) {
       // Pre-swap each piece's width↔height, preserving original dims for recovery.
@@ -731,15 +763,10 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
         console.warn('[HStrip transposed] Error:', e.message);
       }
 
-      const bestTransposedLocal = pickBetter(leptonT, hT, true, false);
-      bestTransposed = bestTransposedLocal;
-      // Track whether the best transposed is the Lepton variant (for outer pick)
-      _bestTransposedIsLepton = bestTransposedLocal === leptonT;
+      bestTransposed = pickBetter(leptonT, hT);
     }
 
-    const best = pickBetter(bestNormal, bestTransposed,
-      /* bestNormal is Lepton? */ bestNormal === leptonWrapped,
-      /* bestTransposed is Lepton? */ _bestTransposedIsLepton);
+    const best = pickBetter(bestNormal, bestTransposed);
     return buildFinalOutput(pieces, best ?? hWrapped, options);
   }
 
