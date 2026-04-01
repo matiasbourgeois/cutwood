@@ -179,6 +179,72 @@ const PRESET_PROJECTS = [
       { id:'r13', name:'Pieza 13', width:534,  height:280, quantity:1, grain:'none', edgeBanding:eb0 },
     ], stock: STOCK_STD, options: OPT_STD,
   },
+  {
+    id: 'preset_tc1_gapfill', name: 'TC1 · Test Gap-Fill (3 muebles)',
+    pieces: [
+      { id:'t1',  name:'Lateral',       width:1900, height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t2',  name:'Fondo base',    width:704,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t3',  name:'Estante',       width:704,  height:450, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'t4',  name:'Zócalo',        width:677,  height:100, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'t5',  name:'Fondo cajón',   width:414,  height:100, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'t6',  name:'Frente cajón',  width:677,  height:120, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t7',  name:'Lateral cajón', width:414,  height:120, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t8',  name:'Lateral 2',     width:1900, height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t9',  name:'Fondo base 2',  width:704,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t10', name:'Estante 2',     width:704,  height:450, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'t11', name:'Frente cajón 2',width:677,  height:120, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'t12', name:'Lat cajón 2',   width:414,  height:120, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'t13', name:'Zócalo 2',      width:677,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t14', name:'Fondo cj 2',    width:414,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t15', name:'Lateral 3',     width:1900, height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t16', name:'Fondo base 3',  width:704,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t17', name:'Costado',       width:450,  height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t18', name:'Puerta',        width:734,  height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t19', name:'Costado 2',     width:450,  height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'t20', name:'Puerta 2',      width:734,  height:450, quantity:2, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_NOVROT,
+  },
+  {
+    id: 'preset_tc2_large', name: 'TC2 · Muebles Grandes (92 piezas)',
+    pieces: [
+      { id:'u1',  name:'Costado A',     width:600,  height:350, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u2',  name:'Lateral A',     width:744,  height:335, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u3',  name:'Fondo A',       width:744,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u4',  name:'Estante A',     width:743,  height:300, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u5',  name:'Puerta A',      width:586,  height:383, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u6',  name:'Panel alto A',  width:595,  height:763, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u7',  name:'Costado B',     width:600,  height:350, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u8',  name:'Lateral B',     width:744,  height:335, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u9',  name:'Fondo B',       width:744,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u10', name:'Repisa B',      width:744,  height:280, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u11', name:'Puerta B',      width:586,  height:383, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u12', name:'Panel alto B',  width:595,  height:763, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u13', name:'Separador',     width:262,  height:335, quantity:5, grain:'none', edgeBanding:eb0 },
+      { id:'u14', name:'Tapa angosta',  width:109,  height:335, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'u15', name:'Costado C',     width:600,  height:400, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u16', name:'Lateral C',     width:744,  height:385, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u17', name:'Fondo C',       width:744,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u18', name:'Columna C',     width:190,  height:771, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'u19', name:'Panel alto C',  width:595,  height:763, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u20', name:'Zócalo C',      width:717,  height:160, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'u21', name:'Entrepaño C',   width:700,  height:333, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'u22', name:'Costado D',     width:600,  height:400, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u23', name:'Lateral D',     width:744,  height:385, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u24', name:'Fondo D',       width:744,  height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u25', name:'Columna D',     width:190,  height:771, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'u26', name:'Panel alto D',  width:595,  height:763, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u27', name:'Zócalo D',      width:717,  height:160, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'u28', name:'Frente cajón',  width:314,  height:160, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'u29', name:'Entrepaño D',   width:700,  height:333, quantity:6, grain:'none', edgeBanding:eb0 },
+      { id:'u30', name:'Trasero gde',   width:1870, height:1590,quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u31', name:'Trasero gde 2', width:1870, height:1590,quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'u32', name:'Estante E',     width:736,  height:250, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u33', name:'Estante F',     width:606,  height:250, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'u34', name:'Estante G',     width:736,  height:250, quantity:3, grain:'none', edgeBanding:eb0 },
+      { id:'u35', name:'Tapa chica',    width:300,  height:250, quantity:4, grain:'none', edgeBanding:eb0 },
+      { id:'u36', name:'Tapa chica 2',  width:300,  height:250, quantity:2, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_NOVROT,
+  },
 ];
 
 const DEFAULT_STOCK = {
@@ -465,7 +531,7 @@ export default function App() {
     setProjectName(project.name || '');
     setPieces(project.pieces || []);
     if (project.stock) setStock(project.stock);
-    if (project.options) setOptions(project.options);
+    if (project.options) setOptions({ ...DEFAULT_OPTIONS, ...project.options });
     setResult(null);
   }, []);
 

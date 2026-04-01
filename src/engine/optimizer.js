@@ -1320,14 +1320,12 @@ function _deepMinCuts(pieces, stock, options, expanded, boardGrain, emit) {
       stock, options,
       (pct, msg) => emit(62 + Math.round(pct / 100 * 23), msg)
     );
-    // Only accept if it's better (fewer boards or same boards + better util)
-    if (gapFilled.boards.length < best.boards.length) {
-      // Re-wrap the result to get proper stats
-      const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
-      if (gapWrapped) {
-        gapWrapped._algoName = (best._algoName || 'HStrip') + '+GapFill';
-        best = gapWrapped;
-      }
+    // Always accept gap-fill result — it may have same board count but
+    // better piece distribution (thin pieces moved to earlier boards)
+    const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
+    if (gapWrapped) {
+      gapWrapped._algoName = (best._algoName || 'HStrip') + '+GapFill';
+      best = gapWrapped;
     }
   }
   emit(85, `Fase 3 ✓ Final: ${best?.boards?.length ?? '?'} tableros`);

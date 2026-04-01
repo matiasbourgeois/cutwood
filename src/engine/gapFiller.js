@@ -1,14 +1,14 @@
 /**
- * Gap-Fill Post-Processor for CutWood Deep Mode
+ * Gap-Fill Post-Processor for CutWood Deep Mode v2.0
  *
  * After the HStrip/Lepton packer produces an initial layout, this module:
  *   1. Scans each board for unused rectangular regions (gaps)
- *   2. Attempts to relocate pieces from LATER boards into those gaps
+ *   2. Attempts to STACK multiple pieces into each gap (not just one!)
  *   3. Attempts to MERGE under-utilized boards by re-packing them together
  *   4. Returns a compacted result with fewer (or equal) boards
  *
- * All placements respect guillotine-compatibility: pieces are only placed
- * in gaps that touch a board edge or are separated by a full-width/height cut.
+ * Key improvement over v1: Sub-column stacking within gaps.
+ * A gap of 131×450mm can fit 3-4 thin pieces stacked vertically.
  *
  * @module gapFiller
  */
@@ -18,13 +18,13 @@ import { runHorizontalStripPack } from './horizontalStripPacker.js';
 // ── Gap Detection ────────────────────────────────────────────────────────────
 
 /**
- * Find rectangular gaps in a board using a sweep-line approach.
+ * Find ALL rectangular gaps in a board using a comprehensive scan.
  * Returns gaps sorted by area (largest first).
  *
- * We detect two types of gaps:
- *   A) RIGHT-SIDE gaps: space to the right of the rightmost piece in each row
- *   B) BOTTOM gap: space below the lowest piece on the board
- *   C) INTER-ROW gaps: unused space between shelves (height mismatch)
+ * Detects three types of gaps:
+ *   A) INTER-PIECE gaps: unused space between pieces within a row
+ *   B) RIGHT-SIDE gaps: space to the right of the rightmost piece in each row
+ *   C) BOTTOM gap: space below the lowest piece on the board
  */
 function findGaps(board, edgeTrim = 0) {
   const pieces = board.pieces || [];
@@ -47,11 +47,31 @@ function findGaps(board, edgeTrim = 0) {
   const rows = [...rowMap.values()].sort((a, b) => a.y - b.y);
   const gaps = [];
 
-  // A) RIGHT-SIDE gaps per row
   for (const row of rows) {
-    const maxX = row.pieces.reduce((m, p) => Math.max(m, p.x + p.placedWidth), eT);
+    // Sort pieces in this row by X coordinate
+    const sorted = [...row.pieces].sort((a, b) => a.x - b.x);
+
+    // A) INTER-PIECE gaps — space between consecutive pieces in the same row
+    for (let k = 0; k < sorted.length - 1; k++) {
+      const curr = sorted[k];
+      const next = sorted[k + 1];
+      const gapX = curr.x + curr.placedWidth;
+      const gapW = next.x - gapX;
+      if (gapW >= 50) {
+        gaps.push({
+          x: gapX,
+          y: row.y,
+          width: gapW,
+          height: row.maxH,
+          type: 'inter',
+        });
+      }
+    }
+
+    // B) RIGHT-SIDE gap — space to the right of the rightmost piece
+    const maxX = sorted.reduce((m, p) => Math.max(m, p.x + p.placedWidth), eT);
     const gapW = (eT + W) - maxX;
-    if (gapW >= 50) { // minimum useful gap width
+    if (gapW >= 50) {
       gaps.push({
         x: maxX,
         y: row.y,
@@ -62,7 +82,7 @@ function findGaps(board, edgeTrim = 0) {
     }
   }
 
-  // B) BOTTOM gap — space below the lowest piece
+  // C) BOTTOM gap — space below the lowest piece
   const maxY = pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
   const bottomGap = (eT + H) - maxY;
   if (bottomGap >= 50) {
@@ -81,17 +101,18 @@ function findGaps(board, edgeTrim = 0) {
 }
 
 
-// ── Piece Relocation ─────────────────────────────────────────────────────────
+// ── Piece Relocation with Sub-Column Stacking ────────────────────────────────
 
 /**
  * Try to relocate pieces from later boards into gaps of earlier boards.
- * This is a greedy, one-pass algorithm:
- *   For each board (i = 0 to N-2):
- *     Find gaps in board[i]
- *     For each gap:
- *       Find pieces in boards[i+1..N-1] that fit
- *       Move the best-fitting piece into the gap
- *       Recalculate gaps
+ * 
+ * KEY FEATURE: Sub-column stacking.
+ * For each gap, we don't just place ONE piece — we try to STACK multiple
+ * pieces vertically within the gap (like Lepton does in its side-columns).
+ * 
+ * Example: A gap of 131×450mm can fit:
+ *   P5 (414×100) rotated to 100×414 → 100mm wide, 414mm tall → NO (414 > 450 but close)
+ *   Actually it stacks: piece1 at y=0 (120mm tall), piece2 at y=125 (120mm), etc.
  *
  * Returns a new boards array (original is NOT mutated).
  */
@@ -104,76 +125,11 @@ function relocatePieces(boards, options = {}, kerf = 3) {
   }));
 
   for (let i = 0; i < result.length - 1; i++) {
-    let gaps = findGaps(result[i], edgeTrim);
+    const gaps = findGaps(result[i], edgeTrim);
 
     for (const gap of gaps) {
-      // Find best piece from later boards
-      let bestPiece = null;
-      let bestBoardIdx = -1;
-      let bestPieceIdx = -1;
-      let bestFit = Infinity; // smaller = better fit (less waste)
-      let bestPlacedW = 0;
-      let bestPlacedH = 0;
-
-      for (let j = i + 1; j < result.length; j++) {
-        for (let k = 0; k < result[j].pieces.length; k++) {
-          const p = result[j].pieces[k];
-          const pw = p.placedWidth;
-          const ph = p.placedHeight;
-
-          // Try normal orientation
-          if (pw + kerf <= gap.width && ph + kerf <= gap.height) {
-            const waste = (gap.width * gap.height) - (pw * ph);
-            if (waste < bestFit) {
-              bestFit = waste;
-              bestPiece = p;
-              bestBoardIdx = j;
-              bestPieceIdx = k;
-              bestPlacedW = pw;
-              bestPlacedH = ph;
-            }
-          }
-
-          // Try rotated (only if piece was rotatable)
-          if (ph + kerf <= gap.width && pw + kerf <= gap.height && pw !== ph) {
-            const waste = (gap.width * gap.height) - (pw * ph);
-            if (waste < bestFit) {
-              bestFit = waste;
-              bestPiece = p;
-              bestBoardIdx = j;
-              bestPieceIdx = k;
-              bestPlacedW = ph;
-              bestPlacedH = pw;
-            }
-          }
-        }
-      }
-
-      if (bestPiece) {
-        // Move piece to this gap
-        const movedPiece = {
-          ...bestPiece,
-          x: gap.x + kerf,
-          y: gap.y + (gap.type === 'bottom' ? kerf : 0),
-          placedWidth: bestPlacedW,
-          placedHeight: bestPlacedH,
-          rotated: bestPlacedW !== bestPiece.placedWidth ? !bestPiece.rotated : bestPiece.rotated,
-        };
-
-        result[i].pieces.push(movedPiece);
-        result[bestBoardIdx].pieces.splice(bestPieceIdx, 1);
-
-        // Shrink the gap for subsequent pieces
-        if (gap.type === 'right') {
-          // Update gap: piece placed at left of gap, remaining gap is to its right
-          gap.x = movedPiece.x + bestPlacedW + kerf;
-          gap.width -= bestPlacedW + kerf;
-        } else if (gap.type === 'bottom') {
-          // Piece placed at top of bottom gap
-          gap.y = movedPiece.y + bestPlacedH + kerf;
-          gap.height -= bestPlacedH + kerf;
-        }
-      }
+      // For each gap, try to fill it with MULTIPLE pieces stacked
+      _fillGapWithStack(gap, result, i, kerf);
     }
   }
 
@@ -181,15 +137,132 @@ function relocatePieces(boards, options = {}, kerf = 3) {
   return result.filter(b => b.pieces.length > 0);
 }
 
+/**
+ * Check if placing a piece at (x, y) with dimensions (w, h) would
+ * overlap with any existing piece on the board.
+ */
+function wouldOverlap(boardPieces, x, y, w, h, kerf) {
+  for (const p of boardPieces) {
+    // Check AABB overlap (with kerf margin)
+    const noOverlap =
+      x + w + kerf <= p.x ||     // new piece is fully left
+      p.x + p.placedWidth + kerf <= x ||  // new piece is fully right
+      y + h + kerf <= p.y ||     // new piece is fully above
+      p.y + p.placedHeight + kerf <= y;   // new piece is fully below
+    if (!noOverlap) return true;
+  }
+  return false;
+}
+
+
+/**
+ * Fill a single gap with as many pieces as possible from later boards.
+ * Pieces are stacked vertically within the gap (sub-column packing).
+ * Now includes collision detection to prevent overlapping.
+ */
+function _fillGapWithStack(gap, boards, targetBoardIdx, kerf) {
+  let currentX = gap.x + kerf;
+  let currentY = gap.y;
+  let columnW = 0; // width of current column
+  let remainingH = gap.height;
+  let remainingW = gap.width - kerf;
+
+  let placedCount = 0;
+  const MAX_ATTEMPTS = 50; // safety limit
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS && remainingW > 50; attempt++) {
+    // Find best piece that fits in remaining space [remainingW × remainingH]
+    let best = null;
+    let bestBoardIdx = -1;
+    let bestPieceIdx = -1;
+    let bestW = 0;
+    let bestH = 0;
+    let bestWaste = Infinity;
+
+    for (let j = targetBoardIdx + 1; j < boards.length; j++) {
+      for (let k = 0; k < boards[j].pieces.length; k++) {
+        const p = boards[j].pieces[k];
+        const pw = p.placedWidth;
+        const ph = p.placedHeight;
+
+        // Try normal orientation
+        if (pw <= remainingW && ph <= remainingH) {
+          // Check collision BEFORE considering this piece
+          if (!wouldOverlap(boards[targetBoardIdx].pieces, currentX, currentY, pw, ph, kerf)) {
+            const waste = remainingH - ph;
+            if (waste < bestWaste || (waste === bestWaste && pw * ph > bestW * bestH)) {
+              bestWaste = waste;
+              best = p; bestBoardIdx = j; bestPieceIdx = k;
+              bestW = pw; bestH = ph;
+            }
+          }
+        }
+
+        // Try rotated
+        if (ph <= remainingW && pw <= remainingH && pw !== ph) {
+          if (!wouldOverlap(boards[targetBoardIdx].pieces, currentX, currentY, ph, pw, kerf)) {
+            const waste = remainingH - pw;
+            if (waste < bestWaste || (waste === bestWaste && pw * ph > bestW * bestH)) {
+              bestWaste = waste;
+              best = p; bestBoardIdx = j; bestPieceIdx = k;
+              bestW = ph; bestH = pw;
+            }
+          }
+        }
+      }
+    }
+
+    if (!best) {
+      // No piece fits in current column space. Start new column?
+      if (columnW > 0) {
+        currentX += columnW + kerf;
+        remainingW -= columnW + kerf;
+        currentY = gap.y;
+        remainingH = gap.height;
+        columnW = 0;
+        continue; // retry with new column
+      }
+      break; // truly no piece fits anywhere
+    }
+
+    // Place piece
+    const movedPiece = {
+      ...best,
+      x: currentX,
+      y: currentY,
+      placedWidth: bestW,
+      placedHeight: bestH,
+      rotated: bestW !== best.placedWidth ? !best.rotated : best.rotated,
+    };
+
+    boards[targetBoardIdx].pieces.push(movedPiece);
+    boards[bestBoardIdx].pieces.splice(bestPieceIdx, 1);
+    placedCount++;
+
+    // Update column tracking
+    columnW = Math.max(columnW, bestW);
+    currentY += bestH + kerf;
+    remainingH -= bestH + kerf;
+
+    // If no more vertical space, start new column
+    if (remainingH < 50) {
+      currentX += columnW + kerf;
+      remainingW -= columnW + kerf;
+      currentY = gap.y;
+      remainingH = gap.height;
+      columnW = 0;
+    }
+  }
+
+  return placedCount;
+}
+
 
 // ── Board Merging ────────────────────────────────────────────────────────────
 
 /**
- * Try to merge the last two boards if their combined pieces fit in one board.
- * Uses HStrip packer to re-pack all pieces from both boards together.
- * 
- * Strategy: work backwards — try merging board[N-1] into board[N-2],
- * then board[N-2] into board[N-3], etc.
+ * Try to merge boards by re-packing their combined pieces into fewer boards.
+ * Works backwards: try merging board[N-1] into board[N-2], etc.
  */
 function tryMergeBoards(boards, stock, options = {}) {
   if (boards.length <= 1) return boards;
@@ -207,13 +280,12 @@ function tryMergeBoards(boards, stock, options = {}) {
       const boardA = result[i - 1];
       const boardB = result[i];
 
-      // Combine all pieces from both boards into expanded format
       const combined = [
         ...boardA.pieces.map(p => ({
           ...p,
           width: p.placedWidth,
           height: p.placedHeight,
-          canRotate: false, // keep current orientation
+          canRotate: false,
         })),
         ...boardB.pieces.map(p => ({
           ...p,
@@ -223,14 +295,12 @@ function tryMergeBoards(boards, stock, options = {}) {
         })),
       ];
 
-      // Try re-packing into a single board
       const singleResult = runHorizontalStripPack(combined, stock, {
         ...options,
-        allowRotation: false, // pieces already oriented
+        allowRotation: false,
       });
 
       if (singleResult.boards.length === 1 && singleResult.unfitted.length === 0) {
-        // Merge successful! Replace both boards with the merged one
         const mergedBoard = {
           ...singleResult.boards[0],
           stockWidth: stock.width,
@@ -238,7 +308,7 @@ function tryMergeBoards(boards, stock, options = {}) {
         };
         result.splice(i - 1, 2, mergedBoard);
         merged = true;
-        break; // restart from the end
+        break;
       }
     }
   }
@@ -247,16 +317,125 @@ function tryMergeBoards(boards, stock, options = {}) {
 }
 
 
+/**
+ * Compact rows within each board by closing inter-piece gaps.
+ * 
+ * Example BEFORE: [P18(734)][P18(734)]  [GAP 422mm]  [P10(704)]
+ * Example AFTER:  [P18(734)][P18(734)][P10(704)]  [GAP 562mm on right]
+ * 
+ * This makes cutting MUCH easier because:
+ * - Big pieces are all together (fewer cuts needed)
+ * - Gap space is consolidated to the right edge
+ * - Thin pieces can be placed in one clean area
+ */
+function compactRows(boards, kerf = 3) {
+  return boards.map(board => {
+    const pieces = board.pieces.map(p => ({ ...p }));
+    
+    // Group pieces by row (Y coordinate)
+    const rowMap = new Map();
+    for (const p of pieces) {
+      const rowKey = Math.round(p.y / 5) * 5;
+      if (!rowMap.has(rowKey)) rowMap.set(rowKey, []);
+      rowMap.get(rowKey).push(p);
+    }
+    
+    for (const [, rowPieces] of rowMap) {
+      // Sort by X position
+      rowPieces.sort((a, b) => a.x - b.x);
+      
+      if (rowPieces.length < 2) continue;
+      
+      // Check for inter-piece gaps and close them
+      for (let k = 1; k < rowPieces.length; k++) {
+        const prev = rowPieces[k - 1];
+        const expectedX = prev.x + prev.placedWidth + kerf;
+        const curr = rowPieces[k];
+        
+        if (curr.x > expectedX + 5) { // gap > 5mm = worth compacting
+          // Shift this piece (and all after it) left to close the gap
+          const shift = curr.x - expectedX;
+          for (let m = k; m < rowPieces.length; m++) {
+            rowPieces[m].x -= shift;
+          }
+        }
+      }
+    }
+    
+    return { ...board, pieces };
+  });
+}
+
+/**
+ * Re-pack boards that have excessive waste (scattered thin pieces).
+ * When a board has >40% waste, re-pack all its pieces using HStrip
+ * to get a tighter layout with pieces grouped by height.
+ */
+function repackScatteredBoards(boards, stock, options = {}) {
+  return boards.map(board => {
+    const pieces = board.pieces || [];
+    if (pieces.length < 3) return board;
+
+    // Calculate utilization
+    const W = stock.width;
+    const H = stock.height;
+    const totalArea = W * H;
+    const usedArea = pieces.reduce((s, p) => s + p.placedWidth * p.placedHeight, 0);
+    const util = usedArea / totalArea;
+
+    // Only re-pack if utilization < 60% (lots of waste = scattered layout)
+    if (util >= 0.60) return board;
+
+    // Re-pack using HStrip
+    const expandedPieces = pieces.map(p => ({
+      ...p,
+      width: p.placedWidth,
+      height: p.placedHeight,
+      quantity: 1,
+      canRotate: false,
+    }));
+
+    try {
+      const repacked = runHorizontalStripPack(expandedPieces, stock, {
+        ...options,
+        allowRotation: false,
+      });
+
+      if (repacked.boards.length === 1 && repacked.unfitted.length === 0) {
+        // Copy over the original piece metadata (names, IDs, etc)
+        const newBoard = repacked.boards[0];
+        // Map repacked pieces back to originals
+        for (let i = 0; i < newBoard.pieces.length; i++) {
+          const rp = newBoard.pieces[i];
+          // Find the matching original piece by dimensions
+          const orig = expandedPieces.find(ep => 
+            ep.width === rp.placedWidth && ep.height === rp.placedHeight && !ep._used
+          ) || expandedPieces.find(ep =>
+            ep.height === rp.placedWidth && ep.width === rp.placedHeight && !ep._used
+          );
+          if (orig) {
+            orig._used = true;
+            rp.name = orig.name;
+            rp.id = orig.id;
+          }
+        }
+        return {
+          ...newBoard,
+          stockWidth: stock.width,
+          stockHeight: stock.height,
+        };
+      }
+    } catch (e) { /* keep original */ }
+
+    return board;
+  });
+}
+
+
 // ── Main Entry Point ─────────────────────────────────────────────────────────
 
 /**
  * Run the full gap-fill + merge pipeline on a packing result.
- *
- * @param {Object} result  — { boards: [...], unfitted: [...] }
- * @param {Object} stock   — { width, height, ... }
- * @param {Object} options — { kerf, edgeTrim, ... }
- * @param {Function} onProgress — optional (percent, message) callback
- * @returns {Object} — improved { boards, unfitted }
  */
 export function postProcessGapFill(result, stock, options = {}, onProgress) {
   if (!result?.boards || result.boards.length <= 1) return result;
@@ -264,21 +443,37 @@ export function postProcessGapFill(result, stock, options = {}, onProgress) {
   const kerf = options.kerf || 3;
   const emit = (pct, msg) => onProgress?.(pct, msg);
 
-  // Phase 1: Relocate pieces from later boards into earlier boards' gaps
-  emit(0, 'Analizando huecos en tableros...');
-  let boards = relocatePieces(result.boards, options, kerf);
-  emit(40, `Reubicación: ${result.boards.length} → ${boards.length} tableros`);
+  // Phase 0: Compact rows — close internal gaps, push space to right edge
+  emit(0, 'Fase gap-fill: compactando filas...');
+  let boards = compactRows(result.boards, kerf);
+
+  // Phase 1: Relocate with sub-column stacking
+  emit(10, 'Fase gap-fill: analizando huecos...');
+  boards = relocatePieces(boards, options, kerf);
+  emit(30, `Reubicación: ${result.boards.length} → ${boards.length} tableros`);
 
   // Phase 2: Try merging under-utilized boards
-  emit(50, 'Intentando fusionar tableros...');
+  emit(40, 'Intentando fusionar tableros...');
   const beforeMerge = boards.length;
   boards = tryMergeBoards(boards, stock, options);
-  emit(80, `Fusión: ${beforeMerge} → ${boards.length} tableros`);
+  emit(60, `Fusión: ${beforeMerge} → ${boards.length} tableros`);
 
-  // Phase 3: One more relocation pass after merging (may reveal new gaps)
+  // Phase 3: Re-pack scattered boards (thin pieces in individual rows)
+  emit(65, 'Re-empaquetando tableros dispersos...');
+  boards = repackScatteredBoards(boards, stock, options);
+
+  // Phase 4: Compact + relocate again after re-packing
+  boards = compactRows(boards, kerf);
   if (boards.length > 1) {
     boards = relocatePieces(boards, options, kerf);
   }
+  emit(80, `Re-empaquetado completo`);
+
+  // Phase 5: Final merge attempt
+  if (boards.length > 1) {
+    boards = tryMergeBoards(boards, stock, options);
+  }
+
   emit(100, `Optimización completa: ${boards.length} tableros`);
 
   return {
@@ -288,4 +483,4 @@ export function postProcessGapFill(result, stock, options = {}, onProgress) {
 }
 
 // Export internals for testing
-export { findGaps, relocatePieces, tryMergeBoards };
+export { findGaps, relocatePieces, tryMergeBoards, repackScatteredBoards };
