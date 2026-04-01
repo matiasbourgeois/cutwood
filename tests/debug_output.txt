@@ -1,0 +1,22 @@
+﻿Total boards: 3
+
+Board 1: 12 pieces, util=97.1%
+  y=0: Lateral(1900x450) + Estante(704x450) + Lateral caj├│n(120x414)
+  y=453: Lateral(1900x450) + Estante(704x450) + Lateral caj├│n(120x414)
+  y=906: Lateral 2(1900x450) + Estante(704x450) + Lat caj├│n 2(120x414)
+  y=1359: Lateral 2(1900x450) + Estante(704x450) + Lat caj├│n 2(120x414)
+
+Board 2: 16 pieces, util=97.1%
+  y=0: Lateral 3(1900x450) + Estante 2(704x450) + Lat caj├│n 2(120x414)
+  y=453: Lateral 3(1900x450) + Estante 2(704x450) + Lat caj├│n 2(120x414)
+  y=906: Puerta(734x450) + Puerta(734x450) + Estante 2(704x450) + Costado(450x450) + Fondo caj├│n(100x414)
+  y=1359: Puerta 2(734x450) + Puerta 2(734x450) + Estante 2(704x450) + Costado(450x450) + Fondo caj├│n(100x414)
+
+Board 3: 24 pieces, util=37.5%
+  y=0: Costado 2(450x450) + Costado 2(450x450) + Frente caj├│n(677x120) + Frente caj├│n 2(677x120)
+  y=123: Frente caj├│n(677x120) + Frente caj├│n 2(677x120)
+  y=246: Frente caj├│n 2(677x120) + Frente caj├│n 2(677x120)
+  y=453: Fondo base(704x100) + Fondo base(704x100) + Fondo base 2(704x100) + Fondo caj├│n(414x100)
+  y=555: Fondo base 2(704x100) + Fondo base 3(704x100) + Fondo base 3(704x100) + Fondo caj├│n(414x100)
+  y=660: Z├│calo(677x100) + Z├│calo(677x100) + Z├│calo(677x100) + Z├│calo(677x100)
+  y=762: Z├│calo 2(677x100) + Z├│calo 2(677x100) + Fondo cj 2(414x100) + Fondo cj 2(414x100)

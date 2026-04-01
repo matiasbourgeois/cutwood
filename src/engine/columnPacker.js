@@ -1,24 +1,24 @@
 /**
- * Lepton-Style Horizontal Strip Packer v3.0
+ * CutWood Column Packer v3.0
  *
- * NUEVO en v3.0 — "Thin-Column Packing":
+ * Advanced horizontal strip packer with thin-column packing.
+ *
+ * Thin-Column Packing (v3.0):
  *   Piezas pequeñas (height ≤ THIN_THRESHOLD) que no califican como row-worthy
- *   NI caben como sub-col son ahora agrupadas en COLUMNAS VERTICALES (igual que
- *   Lepton Board 3), en lugar de dispersarse en mini-rows individuales.
+ *   NI caben como sub-col son agrupadas en COLUMNAS VERTICALES,
+ *   en lugar de dispersarse en mini-rows individuales.
  *
  *   Estrategia:
  *   1. Agrupar fillers por ancho similar (THIN_WIDTH_TOL = 10mm)
  *   2. Apilar verticalmente dentro de cada grupo → crear "columna virtual"
  *   3. Tratar la columna virtual como una fila-ancha de alto = H_board
  *   4. Empaquetar las columnas virtuales juntas horizontalmente
- *   Resultado: 1 corte vertical por columna + N cortes horizontales dentro
- *   → Los mismos 30 cortes de Lepton en vez de los 58 actuales
  *
- * Two-phase strategy (original v2.0):
+ * Two-phase strategy:
  *   PHASE 1 — Row-worthy: grupos que ocupan ≥ ROW_MIN_FILL del ancho → filas propias
  *   PHASE 2 — Sub-column fill: fillers en el espacio residual derecho de las filas
  *
- * @module leptonPacker
+ * @module columnPacker
  */
 
 const ROW_MIN_FILL    = 0.20; // ≥20% board width → row-worthy
@@ -33,14 +33,14 @@ const MIN_COL_ITEMS   = 2;    // mínimo de piezas para formar columna (si hay 1
 const MIN_COL_FILL    = 0.30; // columna debe llenar ≥30% del alto del tablero para valer la pena
 
 /**
- * Paquetizador estilo Lepton v3.0 con Thin-Column Packing.
+ * CutWood Column Packer v3.0 con Thin-Column Packing.
  *
  * @param {Array} expandedPieces - { id, name, width, height, canRotate, forceRotated, ... }
  * @param {Object} stock         - { width, height, quantity, grain }
  * @param {Object} options       - { kerf, edgeTrim, allowRotation }
  * @returns {{ boards, unfitted }}
  */
-export function runLeptonPack(expandedPieces, stock, options = {}) {
+export function runColumnPack(expandedPieces, stock, options = {}) {
   const { kerf = 3, edgeTrim = 0, allowRotation = true } = options;
   const W = stock.width  - edgeTrim * 2;
   const H = stock.height - edgeTrim * 2;

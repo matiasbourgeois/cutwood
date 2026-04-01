@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import ProjectManager from './ProjectManager';
 import PiecesList from './PiecesList';
 import StockConfig from './StockConfig';
-import { Scissors, Loader2, Zap, Brain } from 'lucide-react';
+import { Scissors, Loader2 } from 'lucide-react';
 
 export default function Sidebar({
   projectName,
@@ -22,9 +22,6 @@ export default function Sidebar({
   onSaveNewOffcutsChange,
   consumeUsedOffcuts,
   onConsumeUsedOffcutsChange,
-  // Deep mode props
-  deepMode,
-  onDeepModeChange,
   style,
 }) {
   const projectRef = useRef(null);
@@ -44,7 +41,7 @@ export default function Sidebar({
           onNewProject={onNewProject}
         />
 
-        {/* 2. Board config — FIRST (natural workflow) */}
+        {/* 2. Board config */}
         <StockConfig
           stock={stock}
           onStockChange={onStockChange}
@@ -56,7 +53,7 @@ export default function Sidebar({
           onConsumeUsedOffcutsChange={onConsumeUsedOffcutsChange}
         />
 
-        {/* 3. Pieces list — SECOND, flex-grows to fill remaining space */}
+        {/* 3. Pieces list */}
         <PiecesList
           pieces={pieces}
           onChange={onPiecesChange}
@@ -65,38 +62,15 @@ export default function Sidebar({
         />
       </div>
 
-      {/* Sticky bottom: Mode toggle + Optimize button */}
+      {/* Sticky bottom: Optimize button only */}
       <div className="sidebar-bottom">
-
-        {/* Fast / Deep toggle */}
-        <div className="optimizer-mode-toggle">
-          <button
-            className={`mode-btn ${!deepMode ? 'mode-btn--active' : ''}`}
-            onClick={() => onDeepModeChange(false)}
-            title="Rápido: resultado instantáneo con 126 variantes"
-            disabled={isCalculating}
-          >
-            <Zap size={13} />
-            Rápido
-          </button>
-          <button
-            className={`mode-btn ${deepMode ? 'mode-btn--active mode-btn--deep' : ''}`}
-            onClick={() => onDeepModeChange(true)}
-            title="Profundo: mayor aprovechamiento, ~5-15 segundos"
-            disabled={isCalculating}
-          >
-            <Brain size={13} />
-            Profundo
-          </button>
-        </div>
-
         <button
-          className={`optimize-btn ${deepMode ? 'optimize-btn--deep' : ''}`}
+          className="optimize-btn"
           onClick={onCalculate}
           disabled={isCalculating}
         >
           {isCalculating
-            ? <><Loader2 size={17} className="spin-icon" /> {deepMode ? 'Optimizando...' : 'Calculando...'}</>
+            ? <><Loader2 size={17} className="spin-icon" /> Calculando...</>
             : <><Scissors size={17} /> Optimizar Cortes</>
           }
         </button>

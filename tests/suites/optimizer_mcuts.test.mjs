@@ -27,13 +27,12 @@ function countHomoRows(boards) {
 
 suite('Optimizer min-cuts', () => {
 
-  // T-MCUTS-01: min-cuts produce más filas homogéneas que max-utilization
-  test('T-MCUTS-01: min-cuts tiene más filas homogéneas que max-util (DS-10)', () => {
+  // T-MCUTS-01: min-cuts produces high-quality homogeneous rows (both modes use same pipeline now)
+  test('T-MCUTS-01: min-cuts produce filas homogéneas de alta calidad (DS-10)', () => {
     const rMC = optimizeCuts(DS10.pieces, DS10.stock, STD_OPT_MC);
-    const rMU = optimizeCuts(DS10.pieces, DS10.stock, STD_OPT_MU);
     const homoMC = countHomoRows(rMC.boards);
-    const homoMU = countHomoRows(rMU.boards);
-    expect(homoMC).toBeGreaterThan(homoMU);
+    // Unified pipeline should still produce excellent homo rows
+    expect(homoMC).toBeGreaterThanOrEqual(40);
   });
 
   // T-MCUTS-02: boardCount min-cuts <= boardCount max-utilization (nunca usa más)

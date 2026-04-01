@@ -297,9 +297,7 @@ export default function App() {
   }, [options]);
   const [result, setResult] = useState(null);
   const [currentBoardIndex, setCurrentBoardIndex] = useState(0);
-  const { optimize, cancel, isCalculating, progress, phase, mode: optimizerMode, setMode: setOptimizerMode } = useOptimizer();
-  const deepMode = optimizerMode === 'deep';
-  const onDeepModeChange = (val) => setOptimizerMode(val ? 'deep' : 'fast');
+  const { optimize, cancel, isCalculating } = useOptimizer();
   const [toast, setToast] = useState(null);
   const [offcuts, setOffcuts] = useState(getAllOffcuts());
   const [showConfirm, setShowConfirm] = useState(false);
@@ -661,8 +659,6 @@ export default function App() {
           onSaveNewOffcutsChange={setSaveNewOffcuts}
           consumeUsedOffcuts={consumeUsedOffcuts}
           onConsumeUsedOffcutsChange={setConsumeUsedOffcuts}
-          deepMode={deepMode}
-          onDeepModeChange={onDeepModeChange}
           style={{ width: `${sidebarWidth}%`, minWidth: `${sidebarWidth}%` }}
         />
 
@@ -676,30 +672,7 @@ export default function App() {
         {/* Main canvas */}
         <main className="canvas-area">
 
-          {/* ── Deep Optimization Progress Overlay ── */}
-          {isCalculating && deepMode && (
-            <div className="deep-progress-overlay">
-              <div className="deep-progress-card">
-                <div className="deep-progress-header">
-                  <span className="deep-progress-icon">🔍</span>
-                  <span className="deep-progress-title">Optimización Profunda</span>
-                </div>
-                <div className="deep-progress-bar-track">
-                  <div
-                    className="deep-progress-bar-fill"
-                    style={{ width: `${progress ?? 0}%` }}
-                  />
-                </div>
-                <div className="deep-progress-meta">
-                  <span className="deep-progress-pct">{Math.round(progress ?? 0)}%</span>
-                  <span className="deep-progress-phase">{phase}</span>
-                </div>
-                <button className="deep-progress-cancel" onClick={cancel}>
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
+
 
           {result && result.boards.length > 0 ? (
             <>

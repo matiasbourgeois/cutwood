@@ -1,4 +1,4 @@
-import { runLeptonPack } from '../src/engine/leptonPacker.js';
+import { runColumnPack } from '../src/engine/columnPacker.js';
 import { runHorizontalStripPack } from '../src/engine/horizontalStripPacker.js';
 
 const P = [

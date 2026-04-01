@@ -6,9 +6,8 @@ import { suite, test, expect } from '../runner.mjs';
 import { validateResult, assertAllWithinBoard } from '../validators.mjs';
 import { expandPieces } from '../datasets.mjs';
 import { optimizeCuts } from '../../src/engine/optimizer.js';
-import { runLeptonPack } from '../../src/engine/leptonPacker.js';
+import { runColumnPack } from '../../src/engine/columnPacker.js';
 import { runHorizontalStripPack } from '../../src/engine/horizontalStripPacker.js';
-import { runStripPack } from '../../src/engine/stripPacker.js';
 
 const STD_STOCK = { width: 2750, height: 1830, quantity: 99, grain: 'none' };
 const STD_OPT   = { kerf: 3, edgeTrim: 0, allowRotation: true };
@@ -106,7 +105,7 @@ suite('Edge Cases', () => {
     const trim = 5;
     const W = 2750 - trim * 2, H = 1830 - trim * 2;
     const pieces = [{ id:'ex', name:'Exact', width: W, height: H, quantity: 1 }];
-    const r = runLeptonPack(expandPieces(pieces), STD_STOCK, { ...STD_OPT, edgeTrim: trim });
+    const r = runColumnPack(expandPieces(pieces), STD_STOCK, { ...STD_OPT, edgeTrim: trim });
     expect(r.unfitted.length).toBe(0);
     if (r.boards.length > 0 && r.boards[0].pieces.length > 0) {
       const p = r.boards[0].pieces[0];
@@ -140,9 +139,9 @@ suite('Edge Cases', () => {
     expect(r.unfitted.length).toBe(0);
   });
 
-  // T-EDGE-11: LeptonPacker con 0 piezas → { boards:[], unfitted:[] }
-  test('T-EDGE-11: LeptonPack con cero piezas → sin crash', () => {
-    const r = runLeptonPack([], STD_STOCK, STD_OPT);
+  // T-EDGE-11: ColumnPacker con 0 piezas → { boards:[], unfitted:[] }
+  test('T-EDGE-11: ColumnPack con cero piezas → sin crash', () => {
+    const r = runColumnPack([], STD_STOCK, STD_OPT);
     expect(r.boards.length).toBe(0);
     expect(r.unfitted.length).toBe(0);
   });
@@ -154,10 +153,11 @@ suite('Edge Cases', () => {
     expect(r.unfitted.length).toBe(0);
   });
 
-  // T-EDGE-13: StripPack con 0 piezas → sin crash
-  test('T-EDGE-13: StripPack con cero piezas → sin crash', () => {
-    const r = runStripPack([], STD_STOCK, STD_OPT);
-    expect(r.boards.length).toBe(0);
+  // T-EDGE-13: optimizeCuts with single piece → sin crash
+  test('T-EDGE-13: optimizeCuts single piece → sin crash', () => {
+    const pieces = [{ id:'p', name:'A', width:500, height:500, quantity:1 }];
+    const r = optimizeCuts(pieces, STD_STOCK, STD_OPT);
+    expect(r.boards.length).toBeGreaterThanOrEqual(1);
   });
 
   // T-EDGE-14: allowRotation=false → NINGUNA pieza rotada en resultado
