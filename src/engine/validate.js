@@ -24,6 +24,36 @@ function piecesOverlap(a, b) {
 }
 
 /**
+ * FAST overlap check for raw board arrays.
+ * Used as a gate in the pipeline to reject results with collisions.
+ * Returns true if ANY overlap is found on ANY board.
+ *
+ * @param {Array} boards - Array of { pieces: [...] }
+ * @returns {boolean} true if overlaps exist
+ */
+export function hasOverlapsRaw(boards) {
+  if (!boards) return false;
+  for (const board of boards) {
+    const pieces = board.pieces || [];
+    for (let i = 0; i < pieces.length; i++) {
+      for (let j = i + 1; j < pieces.length; j++) {
+        if (piecesOverlap(pieces[i], pieces[j])) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * FAST overlap check for wrapped results ({ boards: [...] }).
+ * @param {Object} result - { boards: [...] }
+ * @returns {boolean} true if overlaps exist
+ */
+export function hasOverlaps(result) {
+  return hasOverlapsRaw(result?.boards);
+}
+
+/**
  * Validate a complete optimization result.
  * 
  * @param {Object} result  - { boards: [...], unfitted: [...] }

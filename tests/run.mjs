@@ -10,6 +10,7 @@ import './suites/columnPacker.test.mjs';
 import './suites/optimizer_mcuts.test.mjs';
 import './suites/optimizer_maxutil.test.mjs';
 import './suites/canvas_render.test.mjs';
+import './suites/mega_test.test.mjs';
 
 import { run } from './runner.mjs';
 

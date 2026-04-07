@@ -245,6 +245,41 @@ const PRESET_PROJECTS = [
       { id:'u36', name:'Tapa chica 2',  width:300,  height:250, quantity:2, grain:'none', edgeBanding:eb0 },
     ], stock: STOCK_STD, options: OPT_NOVROT,
   },
+  {
+    id: 'preset_benchmark_lepton', name: '🔬 Benchmark Lepton — 6 Muebles (30 pzas)',
+    pieces: [
+      // Mueble 1: Biblioteca chica
+      { id:'lp1',  name:'Lateral M1',   width:720,  height:560, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'lp2',  name:'Base M1',      width:1134, height:545, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp3',  name:'Travesaño M1', width:1134, height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp4',  name:'Estante M1',   width:1133, height:540, quantity:1, grain:'none', edgeBanding:eb0 },
+      // Mueble 2: Biblioteca mediana
+      { id:'lp5',  name:'Lateral M2',   width:720,  height:550, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'lp6',  name:'Base M2',      width:1194, height:535, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp7',  name:'Travesaño M2', width:1194, height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp8',  name:'Estante M2',   width:1193, height:540, quantity:1, grain:'none', edgeBanding:eb0 },
+      // Mueble 3: Módulo bajo A
+      { id:'lp9',  name:'Lateral M3',   width:720,  height:560, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'lp10', name:'Base M3',      width:449,  height:545, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp11', name:'Travesaño M3', width:449,  height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp12', name:'Estante M3',   width:448,  height:490, quantity:1, grain:'none', edgeBanding:eb0 },
+      // Mueble 4: Módulo bajo B
+      { id:'lp13', name:'Lateral M4',   width:720,  height:560, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'lp14', name:'Base M4',      width:459,  height:545, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp15', name:'Travesaño M4', width:459,  height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp16', name:'Estante M4',   width:458,  height:490, quantity:1, grain:'none', edgeBanding:eb0 },
+      // Mueble 5: Estantería abierta A
+      { id:'lp17', name:'LAT M5',       width:1540, height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'lp18', name:'Tapa M5',      width:449,  height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp19', name:'Base M5',      width:449,  height:560, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp20', name:'Estante M5',   width:525,  height:500, quantity:1, grain:'none', edgeBanding:eb0 },
+      // Mueble 6: Estantería abierta B
+      { id:'lp21', name:'LAT M6',       width:1520, height:100, quantity:2, grain:'none', edgeBanding:eb0 },
+      { id:'lp22', name:'Tapa M6',      width:459,  height:100, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp23', name:'Base M6',      width:459,  height:560, quantity:1, grain:'none', edgeBanding:eb0 },
+      { id:'lp24', name:'Estante M6',   width:535,  height:500, quantity:1, grain:'none', edgeBanding:eb0 },
+    ], stock: STOCK_STD, options: OPT_STD,
+  },
 ];
 
 const DEFAULT_STOCK = {

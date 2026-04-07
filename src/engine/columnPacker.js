@@ -23,8 +23,9 @@
 
 const ROW_MIN_FILL    = 0.20; // ≥20% board width → row-worthy
 const MIN_SUBCOL_W    = 30;   // residual mínimo para abrir sub-columna
-const HEIGHT_SNAP_TOL = 5;    // mm — funde alturas dentro de esta tolerancia
+const HEIGHT_SNAP_TOL = 0;    // mm — 0 = sin fusión automática (evita mezclar LATERAL con BASE)
 const HEIGHT_MIX_TOL  = 55;   // mm — fillers pueden unirse a rows con Δh ≤ esto
+const ROW_MERGE_TOL   = 20;   // mm — grupos adyacentes en altura se pueden mezclar en misma fila
 
 // ── v3.0: Thin-Column Packing constants ──────────────────────────────────────
 const THIN_THRESHOLD  = 150;  // mm — piezas con height ≤ esto son candidatas a columna

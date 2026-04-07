@@ -24,7 +24,8 @@
 import { runHorizontalStripPack } from './horizontalStripPacker.js';
 import { runColumnPack } from './columnPacker.js';
 import { postProcessGapFill } from './gapFiller.js';
-import { validateResult } from './validate.js';
+import { consolidateBoards } from './boardConsolidator.js';
+import { validateResult, hasOverlaps, hasOverlapsRaw } from './validate.js';
 
 // ── Sort orders ─────────────────────────────────────────────────────────────
 
@@ -151,20 +152,25 @@ function pickBetter(a, b) {
 
 /** Wrap a strip-style result into the standard raw-result format. */
 function _wrapStripResult(stripResult, stock, boardGrain) {
-  const placedArea = stripResult.boards.reduce((s,b) => s + b.pieces.reduce((a,p) => a + p.placedWidth * p.placedHeight, 0), 0);
-  const stockArea  = stripResult.boards.reduce((s,b) => s + b.stockWidth * b.stockHeight, 0);
-  const util = stockArea > 0 ? (placedArea / stockArea) * 100 : 0;
+  const totalPlaced = stripResult.boards.reduce((s,b) => s + b.pieces.reduce((a,p) => a + p.placedWidth * p.placedHeight, 0), 0);
+  const totalStock  = stripResult.boards.reduce((s,b) => s + b.stockWidth * b.stockHeight, 0);
+  const globalUtil = totalStock > 0 ? (totalPlaced / totalStock) * 100 : 0;
   return {
-    boards: stripResult.boards.map(b => ({
-      bin: { freeRects: [], getUtilization: () => util, getWasteArea: () => stockArea - placedArea },
-      stockWidth: b.stockWidth, stockHeight: b.stockHeight,
-      boardGrain: b.boardGrain || boardGrain, pieces: b.pieces,
-    })),
+    boards: stripResult.boards.map(b => {
+      const boardPlaced = b.pieces.reduce((a,p) => a + p.placedWidth * p.placedHeight, 0);
+      const boardStock = b.stockWidth * b.stockHeight;
+      const boardUtil = boardStock > 0 ? (boardPlaced / boardStock) * 100 : 0;
+      return {
+        bin: { freeRects: [], getUtilization: () => boardUtil, getWasteArea: () => boardStock - boardPlaced },
+        stockWidth: b.stockWidth, stockHeight: b.stockHeight,
+        boardGrain: b.boardGrain || boardGrain, pieces: b.pieces,
+      };
+    }),
     unfitted: stripResult.unfitted,
     consumedOffcutIds: [],
     boardCount: stripResult.boards.length,
-    utilization: util,
-    totalStockArea: stockArea,
+    utilization: globalUtil,
+    totalStockArea: totalStock,
   };
 }
 
@@ -263,66 +269,164 @@ function _runTransposed(packer, expanded, stock, options) {
 // ── Run all standard variants ───────────────────────────────────────────────
 
 /**
+ * Sort orders to try in multi-sort search.
+ * Each order produces a different piece sequence → different packing layout.
+ * We limit to 5 high-impact orders to keep runtime bounded (~50ms total).
+ */
+const MULTI_SORT_ORDERS = [
+  'area-desc',        // largest first (default, aggressive)
+  'height-desc',      // tallest first (good for strip packing)
+  'width-desc',       // widest first (good for column packing)
+  'perimeter-desc',   // largest perimeter first (balanced)
+  'max-side-desc',    // longest dimension first
+];
+
+/**
  * Run all standard packing variants and return the best result.
- * Used by both optimizeCuts (fast) and optimizeDeep.
+ *
+ * v6.1: Multi-sort search — tries each packer with multiple sort orders.
+ * Total variants: 5 sorts × 3 packers × 2 orientations = up to 30 variants.
+ * Typical runtime: 30-80ms (each individual pack takes ~1-3ms).
  */
 function _runAllVariants(expanded, stock, options, boardGrain) {
   let best = null;
 
   const tryResult = (r, name) => {
     if (!r) return;
+    // SAFETY: reject any packer result that has overlaps
+    if (hasOverlaps(r)) return;
     r._algoName = name;
     best = pickBetter(best, r);
   };
 
-  // A) ColumnPack normal
-  try {
-    const r = runColumnPack(expanded.map(p => ({ ...p })), stock, options);
-    tryResult(_wrapStripResult(r, stock, boardGrain), 'ColumnPack');
-  } catch (e) { /* skip */ }
-
-  // B) HStrip normal
-  const hResult = runHorizontalStripPack(expanded.map(p => ({ ...p })), stock, options);
-  tryResult(_wrapStripResult(hResult, stock, boardGrain), 'HStrip');
-
-  // C) Two-Pass HStrip
-  try {
-    const r = _runTwoPassHStrip(expanded, stock, options);
-    if (r) tryResult(_wrapStripResult(r, stock, boardGrain), 'HStrip-2P');
-  } catch (e) { /* skip */ }
-
-  // Transposed variants (skip for square or grain-constrained boards)
   const isSquare = stock.width === stock.height;
   const hasGrain = boardGrain && boardGrain !== 'none';
+  const canTranspose = !isSquare && !hasGrain;
 
-  if (!isSquare && !hasGrain) {
-    // D) ColumnPack transposed
-    const cpT = _runTransposed(runColumnPack, expanded, stock, options);
-    if (cpT) tryResult(cpT, 'ColumnPack (T)');
+  // ── For each sort order, try all packers ──
+  for (const sortOrder of MULTI_SORT_ORDERS) {
+    const sorted = applySortOrder(expanded, sortOrder);
+    const tag = sortOrder === 'area-desc' ? '' : `[${sortOrder}]`;
 
-    // E) HStrip transposed
-    const hT = _runTransposed(runHorizontalStripPack, expanded, stock, options);
-    if (hT) tryResult(hT, 'HStrip (T)');
-
-    // F) Two-Pass HStrip transposed
+    // A) ColumnPack normal
     try {
-      const tPieces = expanded.map(p => ({
-        ...p, _origWidth: p.width, _origHeight: p.height,
-        width: p.canRotate !== false ? p.height : p.width,
-        height: p.canRotate !== false ? p.width : p.height,
-        canRotate: false,
-      }));
-      const tStock = { ...stock, width: stock.height, height: stock.width };
-      const r = _runTwoPassHStrip(tPieces, tStock, options);
-      if (r) {
-        const w = _wrapStripResult(r, tStock, boardGrain);
-        const ut = _untransposeResult(w, stock.width, stock.height);
-        if (ut) tryResult(ut, 'HStrip-2P (T)');
-      }
+      const r = runColumnPack(sorted.map(p => ({ ...p })), stock, options);
+      tryResult(_wrapStripResult(r, stock, boardGrain), `ColumnPack${tag}`);
     } catch (e) { /* skip */ }
+
+    // B) HStrip normal
+    try {
+      const r = runHorizontalStripPack(sorted.map(p => ({ ...p })), stock, options);
+      tryResult(_wrapStripResult(r, stock, boardGrain), `HStrip${tag}`);
+    } catch (e) { /* skip */ }
+
+    // C) Two-Pass HStrip
+    try {
+      const r = _runTwoPassHStrip(sorted, stock, options);
+      if (r) tryResult(_wrapStripResult(r, stock, boardGrain), `HStrip-2P${tag}`);
+    } catch (e) { /* skip */ }
+
+    // Transposed variants
+    if (canTranspose) {
+      // D) ColumnPack transposed
+      try {
+        const cpT = _runTransposed(runColumnPack, sorted, stock, options);
+        if (cpT) tryResult(cpT, `ColumnPack(T)${tag}`);
+      } catch (e) { /* skip */ }
+
+      // E) HStrip transposed
+      try {
+        const hT = _runTransposed(runHorizontalStripPack, sorted, stock, options);
+        if (hT) tryResult(hT, `HStrip(T)${tag}`);
+      } catch (e) { /* skip */ }
+
+      // F) Two-Pass HStrip transposed
+      try {
+        const tPieces = sorted.map(p => ({
+          ...p, _origWidth: p.width, _origHeight: p.height,
+          width: p.canRotate !== false ? p.height : p.width,
+          height: p.canRotate !== false ? p.width : p.height,
+          canRotate: false,
+        }));
+        const tStock = { ...stock, width: stock.height, height: stock.width };
+        const r = _runTwoPassHStrip(tPieces, tStock, options);
+        if (r) {
+          const w = _wrapStripResult(r, tStock, boardGrain);
+          const ut = _untransposeResult(w, stock.width, stock.height);
+          if (ut) tryResult(ut, `HStrip-2P(T)${tag}`);
+        }
+      } catch (e) { /* skip */ }
+    }
   }
 
+  // Also try group-area-desc (special sort that clusters same-size pieces)
+  try {
+    const grouped = applySortOrder(expanded, 'group-area-desc');
+    const r1 = runColumnPack(grouped.map(p => ({ ...p })), stock, options);
+    tryResult(_wrapStripResult(r1, stock, boardGrain), 'ColumnPack[grp]');
+  } catch (e) { /* skip */ }
+  try {
+    const grouped = applySortOrder(expanded, 'group-area-desc');
+    const r2 = runHorizontalStripPack(grouped.map(p => ({ ...p })), stock, options);
+    tryResult(_wrapStripResult(r2, stock, boardGrain), 'HStrip[grp]');
+  } catch (e) { /* skip */ }
+
   return best;
+}
+
+/**
+ * Collect the top N packing candidates (for post-processing fallback).
+ * Same logic as _runAllVariants but keeps a ranked list instead of single best.
+ */
+function _collectTopCandidates(expanded, stock, options, boardGrain, maxCandidates = 5) {
+  const all = [];
+
+  const collect = (r, name) => {
+    if (!r) return;
+    if (hasOverlaps(r)) return;
+    r._algoName = name;
+    all.push(r);
+  };
+
+  const isSquare = stock.width === stock.height;
+  const hasGrain = boardGrain && boardGrain !== 'none';
+  const canTranspose = !isSquare && !hasGrain;
+
+  for (const sortOrder of MULTI_SORT_ORDERS) {
+    const sorted = applySortOrder(expanded, sortOrder);
+    const tag = sortOrder === 'area-desc' ? '' : `[${sortOrder}]`;
+
+    try {
+      const r = runColumnPack(sorted.map(p => ({ ...p })), stock, options);
+      collect(_wrapStripResult(r, stock, boardGrain), `ColumnPack${tag}`);
+    } catch (e) { /* skip */ }
+
+    try {
+      const r = runHorizontalStripPack(sorted.map(p => ({ ...p })), stock, options);
+      collect(_wrapStripResult(r, stock, boardGrain), `HStrip${tag}`);
+    } catch (e) { /* skip */ }
+
+    try {
+      const r = _runTwoPassHStrip(sorted, stock, options);
+      if (r) collect(_wrapStripResult(r, stock, boardGrain), `HStrip-2P${tag}`);
+    } catch (e) { /* skip */ }
+
+    if (canTranspose) {
+      try {
+        const cpT = _runTransposed(runColumnPack, sorted, stock, options);
+        if (cpT) collect(cpT, `ColumnPack(T)${tag}`);
+      } catch (e) { /* skip */ }
+
+      try {
+        const hT = _runTransposed(runHorizontalStripPack, sorted, stock, options);
+        if (hT) collect(hT, `HStrip(T)${tag}`);
+      } catch (e) { /* skip */ }
+    }
+  }
+
+  // Sort by combined score (lower = better) and return top N unique results
+  all.sort((a, b) => combinedScore(a) - combinedScore(b));
+  return all.slice(0, maxCandidates);
 }
 
 
@@ -788,26 +892,147 @@ export function optimizeCuts(pieces, stock, options = {}, availableOffcuts = [])
   const boardGrain = stock.grain || 'none';
   const expanded = expandPieces(pieces, boardGrain);
 
-  // Run all packing variants and pick the best
+  // Phase 1: Get the best raw packer result
   let best = _runAllVariants(expanded, stock, options, boardGrain);
 
-  // Always run GapFill to redistribute pieces across boards
-  if (best && best.boards && best.boards.length > 1) {
-    try {
-      const gapFilled = postProcessGapFill(
-        { boards: best.boards, unfitted: best.unfitted || [] },
-        stock, options
-      );
-      const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
-      if (gapWrapped) {
-        gapWrapped._algoName = (best._algoName || 'HStrip') + '+GapFill';
-        best = gapWrapped;
+  // Phase 2: Try GapFill + Consolidation pipeline
+  if (best?.boards?.length > 1) {
+    const postProcessed = _tryPostProcess(best, stock, options, boardGrain);
+    if (postProcessed) {
+      best = postProcessed;
+    } else {
+      // Primary variant's post-processing failed (overlaps). 
+      // Try ALL variants with post-processing and pick the overall best.
+      const allPostProcessed = _tryAllVariantsWithPostProcess(expanded, stock, options, boardGrain);
+      if (allPostProcessed) {
+        best = pickBetter(best, allPostProcessed);
       }
-    } catch (e) { /* GapFill failed, use original result */ }
+    }
   }
 
   const algoName = best?._algoName ?? 'HStrip';
   return buildFinalOutput(pieces, best, options, expanded, algoName);
+}
+
+/**
+ * Try GapFill + Consolidation on a result. Returns wrapped result or null if overlaps.
+ */
+function _tryPostProcess(result, stock, options, boardGrain) {
+  let current = result;
+  const baseAlgo = current._algoName || 'HStrip';
+
+  // GapFill
+  if (current.boards.length > 1) {
+    try {
+      const gapFilled = postProcessGapFill(
+        { boards: current.boards.map(b => ({ ...b, pieces: b.pieces.map(p => ({ ...p })) })),
+          unfitted: current.unfitted || [] },
+        stock, options
+      );
+      if (!hasOverlapsRaw(gapFilled.boards)) {
+        const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
+        if (gapWrapped) {
+          gapWrapped._algoName = baseAlgo + '+GapFill';
+          current = gapWrapped;
+        }
+      } else {
+        return null; // GapFill introduced overlaps → abort this variant
+      }
+    } catch (e) { /* skip */ }
+  }
+
+  // Consolidation
+  if (current.boards.length > 1) {
+    try {
+      const consolidated = consolidateBoards(
+        { boards: current.boards.map(b => ({ ...b, pieces: b.pieces.map(p => ({ ...p })) })),
+          unfitted: current.unfitted || [] },
+        stock, options
+      );
+      if (consolidated.consolidated) {
+        if (!hasOverlapsRaw(consolidated.boards)) {
+          const consWrapped = _wrapStripResult(consolidated, stock, boardGrain);
+          if (consWrapped) {
+            consWrapped._algoName = baseAlgo + '+GapFill+Cons';
+            current = consWrapped;
+          }
+        }
+        // If Cons introduced overlaps, keep the GapFill result (not abort)
+      }
+    } catch (e) { /* skip */ }
+  }
+
+  return hasOverlaps(current) ? null : current;
+}
+
+/**
+ * Run ALL packer variants, post-process each one, and return the best clean result.
+ * Used as fallback when the primary winner's post-processing fails.
+ */
+function _tryAllVariantsWithPostProcess(expanded, stock, options, boardGrain) {
+  let overallBest = null;
+
+  const isSquare = stock.width === stock.height;
+  const hasGrain = boardGrain && boardGrain !== 'none';
+  const canTranspose = !isSquare && !hasGrain;
+
+  for (const sortOrder of MULTI_SORT_ORDERS) {
+    const sorted = applySortOrder(expanded, sortOrder);
+    const tag = sortOrder === 'area-desc' ? '' : `[${sortOrder}]`;
+
+    const rawResults = [];
+
+    // Collect raw results from all packers
+    try {
+      const r = runColumnPack(sorted.map(p => ({ ...p })), stock, options);
+      if (!hasOverlapsRaw(r.boards)) {
+        const w = _wrapStripResult(r, stock, boardGrain);
+        if (w) { w._algoName = `ColumnPack${tag}`; rawResults.push(w); }
+      }
+    } catch (e) { /* skip */ }
+
+    try {
+      const r = runHorizontalStripPack(sorted.map(p => ({ ...p })), stock, options);
+      if (!hasOverlapsRaw(r.boards)) {
+        const w = _wrapStripResult(r, stock, boardGrain);
+        if (w) { w._algoName = `HStrip${tag}`; rawResults.push(w); }
+      }
+    } catch (e) { /* skip */ }
+
+    try {
+      const r = _runTwoPassHStrip(sorted, stock, options);
+      if (r && !hasOverlapsRaw(r.boards)) {
+        const w = _wrapStripResult(r, stock, boardGrain);
+        if (w) { w._algoName = `HStrip-2P${tag}`; rawResults.push(w); }
+      }
+    } catch (e) { /* skip */ }
+
+    if (canTranspose) {
+      try {
+        const cpT = _runTransposed(runColumnPack, sorted, stock, options);
+        if (cpT && !hasOverlaps(cpT)) { cpT._algoName = `ColumnPack(T)${tag}`; rawResults.push(cpT); }
+      } catch (e) { /* skip */ }
+
+      try {
+        const hT = _runTransposed(runHorizontalStripPack, sorted, stock, options);
+        if (hT && !hasOverlaps(hT)) { hT._algoName = `HStrip(T)${tag}`; rawResults.push(hT); }
+      } catch (e) { /* skip */ }
+    }
+
+    // Try post-processing each raw result
+    for (const raw of rawResults) {
+      if (raw.boards.length <= 1) {
+        overallBest = pickBetter(overallBest, raw);
+        continue;
+      }
+      const pp = _tryPostProcess(raw, stock, options, boardGrain);
+      if (pp) {
+        overallBest = pickBetter(overallBest, pp);
+      }
+    }
+  }
+
+  return overallBest;
 }
 
 
@@ -880,10 +1105,13 @@ export function optimizeDeep(pieces, stock, options = {}, availableOffcuts = [],
       stock, options,
       (pct, msg) => emit(62 + Math.round(pct / 100 * 23), msg)
     );
-    const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
-    if (gapWrapped) {
-      gapWrapped._algoName = (best._algoName || 'HStrip') + '+GapFill';
-      best = gapWrapped;
+    // SAFETY GATE: reject GapFill if it introduced overlaps
+    if (!hasOverlapsRaw(gapFilled.boards)) {
+      const gapWrapped = _wrapStripResult(gapFilled, stock, boardGrain);
+      if (gapWrapped) {
+        gapWrapped._algoName = (best._algoName || 'HStrip') + '+GapFill';
+        best = gapWrapped;
+      }
     }
   }
   emit(85, `Fase 3 ✓ Final: ${best?.boards?.length ?? '?'} tableros`);

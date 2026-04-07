@@ -474,6 +474,49 @@ export function postProcessGapFill(result, stock, options = {}, onProgress) {
     boards = tryMergeBoards(boards, stock, options);
   }
 
+  // Phase 6: Absorb near-empty last board into earlier boards.
+  // When the last board has <10% util, try to place its pieces in the
+  // bottom-gap of any earlier board. Eliminates "1 piece on Board 3".
+  if (boards.length > 1) {
+    const lastBoard = boards[boards.length - 1];
+    const lastArea = lastBoard.pieces.reduce((s, p) => s + p.placedWidth * p.placedHeight, 0);
+    const lastUtil = lastArea / (lastBoard.stockWidth * lastBoard.stockHeight);
+
+    if (lastUtil < 0.10 && lastBoard.pieces.length > 0) {
+      const eT = options.edgeTrim || 0;
+      let allAbsorbed = true;
+
+      for (const orphan of lastBoard.pieces) {
+        let placed = false;
+        for (let bi = 0; bi < boards.length - 1 && !placed; bi++) {
+          const b = boards[bi];
+          const maxY = b.pieces.reduce((m, p) => Math.max(m, p.y + p.placedHeight), eT);
+          const freeH = stock.height - eT - maxY - kerf;
+          const freeW = stock.width - eT * 2;
+
+          // Try normal orientation
+          if (orphan.placedWidth <= freeW && orphan.placedHeight <= freeH) {
+            b.pieces.push({ ...orphan, x: eT, y: maxY + kerf });
+            placed = true;
+          }
+          // Try rotated
+          if (!placed && orphan.placedWidth !== orphan.placedHeight &&
+              orphan.placedHeight <= freeW && orphan.placedWidth <= freeH) {
+            b.pieces.push({
+              ...orphan, x: eT, y: maxY + kerf,
+              placedWidth: orphan.placedHeight, placedHeight: orphan.placedWidth,
+              rotated: !orphan.rotated,
+            });
+            placed = true;
+          }
+        }
+        if (!placed) { allAbsorbed = false; break; }
+      }
+
+      if (allAbsorbed) boards = boards.slice(0, -1);
+    }
+  }
+
   emit(100, `Optimización completa: ${boards.length} tableros`);
 
   return {
